@@ -21,6 +21,19 @@ void main() {
     expect(await repository.all(), hasLength(1));
   });
 
+  test('create 会带上标签与文件夹', () async {
+    final created = await repository.create(
+      title: '带标签',
+      content: '',
+      tags: const <String>['工作'],
+      folderId: 'folder-1',
+    );
+
+    final stored = await repository.findById(created.id);
+    expect(stored?.tags, <String>['工作']);
+    expect(stored?.folderId, 'folder-1');
+  });
+
   test('all 按更新时间倒序返回', () async {
     final repository = InMemoryNoteRepository(<Note>[
       Note(
@@ -50,17 +63,34 @@ void main() {
       id: note.id,
       title: '新标题',
       content: '新正文',
+      tags: const <String>['工作'],
+      folderId: 'folder-9',
     );
 
     expect(updated.id, note.id);
     expect(updated.title, '新标题');
     expect(updated.content, '新正文');
+    expect(updated.tags, <String>['工作']);
+    expect(updated.folderId, 'folder-9');
     expect(updated.createdAt, note.createdAt);
     // 同一毫秒内可能相等，所以只断言「没有被改早」。
     expect(updated.updatedAt.isBefore(note.updatedAt), isFalse);
 
     final stored = await repository.findById(note.id);
     expect(stored?.title, '新标题');
+  });
+
+  test('update 可以清空文件夹归属', () async {
+    final note = await repository.create(title: 'x', content: '', folderId: 'folder-1');
+    final updated = await repository.update(
+      id: note.id,
+      title: 'x',
+      content: '',
+      tags: const <String>[],
+      folderId: null,
+    );
+
+    expect(updated.folderId, isNull);
   });
 
   test('delete 后查不到，restore 可以完整还原', () async {

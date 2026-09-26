@@ -1,0 +1,66 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:markdown/markdown.dart' as md;
+
+/// Markdown 渲染视图。
+///
+/// 用 GitHub Flavored 扩展集，因此标题、列表、任务列表、代码块、
+/// 链接、表格、引用、分割线都能正常渲染；样式由当前主题派生，
+/// 切换主色 / 深浅模式时预览会跟着变。
+class MarkdownView extends StatelessWidget {
+  const MarkdownView({
+    super.key,
+    required this.data,
+    this.onTapLink,
+  });
+
+  final String data;
+
+  /// 点击链接时回调（应用内不额外引入 url_launcher，交由调用方决定怎么处理）。
+  final void Function(String href)? onTapLink;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final base = MarkdownStyleSheet.fromTheme(theme);
+    final outline = theme.colorScheme.outlineVariant;
+
+    final style = base.copyWith(
+      codeblockDecoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      codeblockPadding: const EdgeInsets.all(12),
+      code: (base.code ?? const TextStyle()).copyWith(
+        backgroundColor: Colors.transparent,
+        fontFamily: 'monospace',
+      ),
+      blockquoteDecoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      blockquotePadding: const EdgeInsets.all(12),
+      tableBorder: TableBorder.all(
+        color: outline,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      tableCellsPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      horizontalRuleDecoration: BoxDecoration(
+        border: Border(top: BorderSide(color: outline)),
+      ),
+    );
+
+    return MarkdownBody(
+      data: data,
+      selectable: true,
+      extensionSet: md.ExtensionSet.gitHubFlavored,
+      styleSheet: style,
+      onTapLink: (text, href, title) {
+        final target = href;
+        if (target != null && target.isNotEmpty) {
+          onTapLink?.call(target);
+        }
+      },
+    );
+  }
+}

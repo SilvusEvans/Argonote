@@ -12,13 +12,20 @@ abstract class NoteRepository {
   Future<Note?> findById(String id);
 
   /// 新建一条笔记并返回落库后的实例。
-  Future<Note> create({required String title, required String content});
+  Future<Note> create({
+    required String title,
+    required String content,
+    List<String> tags = const <String>[],
+    String? folderId,
+  });
 
-  /// 更新标题/正文（内部刷新 updatedAt），返回更新后的实例。
+  /// 更新标题/正文/标签/文件夹（内部刷新 updatedAt），返回更新后的实例。
   Future<Note> update({
     required String id,
     required String title,
     required String content,
+    required List<String> tags,
+    String? folderId,
   });
 
   /// 删除一条笔记。id 不存在时静默忽略。

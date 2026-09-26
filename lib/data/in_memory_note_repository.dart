@@ -6,7 +6,8 @@ import 'note_repository.dart';
 /// 行为和 [SharedPrefsNoteRepository] 一致（同样按更新时间倒序），
 /// 但不落盘，测试里无需 mock 平台通道。
 class InMemoryNoteRepository implements NoteRepository {
-  InMemoryNoteRepository([List<Note>? seed]) : _notes = <Note>[...(seed ?? const <Note>[])];
+  InMemoryNoteRepository([List<Note>? seed])
+      : _notes = <Note>[...(seed ?? const <Note>[])];
 
   final List<Note> _notes;
 
@@ -25,8 +26,18 @@ class InMemoryNoteRepository implements NoteRepository {
   }
 
   @override
-  Future<Note> create({required String title, required String content}) async {
-    final note = Note.create(title: title, content: content);
+  Future<Note> create({
+    required String title,
+    required String content,
+    List<String> tags = const <String>[],
+    String? folderId,
+  }) async {
+    final note = Note.create(
+      title: title,
+      content: content,
+      tags: tags,
+      folderId: folderId,
+    );
     _notes.add(note);
     return note;
   }
@@ -36,13 +47,19 @@ class InMemoryNoteRepository implements NoteRepository {
     required String id,
     required String title,
     required String content,
+    required List<String> tags,
+    String? folderId,
   }) async {
     final index = _notes.indexWhere((note) => note.id == id);
-    if (index == -1) return create(title: title, content: content);
+    if (index == -1) {
+      return create(title: title, content: content, tags: tags, folderId: folderId);
+    }
     final updated = _notes[index].copyWith(
       title: title,
       content: content,
       updatedAt: DateTime.now(),
+      tags: tags,
+      folderId: folderId,
     );
     _notes[index] = updated;
     return updated;
