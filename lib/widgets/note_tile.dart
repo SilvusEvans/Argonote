@@ -6,7 +6,7 @@ import '../utils/date_format.dart';
 
 /// 列表里的一条笔记（页）。
 ///
-/// 点击打开标签页；右上角弹出动作菜单，回收站视图下自动切换为
+/// 点击打开标签页；右上角弹出动作菜单，归档视图下自动切换为
 /// 「还原 / 彻底删除」。
 class NoteTile extends StatelessWidget {
   const NoteTile({
@@ -16,7 +16,7 @@ class NoteTile extends StatelessWidget {
     this.sectionLabel,
     this.strings,
     this.onPinToggle,
-    this.onTrash,
+    this.onArchive,
     this.onRestore,
     this.onDeleteForever,
   });
@@ -30,7 +30,7 @@ class NoteTile extends StatelessWidget {
   final AppStrings? strings;
 
   final VoidCallback? onPinToggle;
-  final VoidCallback? onTrash;
+  final VoidCallback? onArchive;
   final VoidCallback? onRestore;
   final VoidCallback? onDeleteForever;
 
@@ -101,8 +101,8 @@ class NoteTile extends StatelessWidget {
                 switch (value) {
                   case 'pin':
                     onPinToggle?.call();
-                  case 'trash':
-                    onTrash?.call();
+                  case 'archive':
+                    onArchive?.call();
                   case 'restore':
                     onRestore?.call();
                   case 'forever':
@@ -110,7 +110,7 @@ class NoteTile extends StatelessWidget {
                 }
               },
               itemBuilder: (context) => <PopupMenuEntry<String>>[
-                if (!note.trashed)
+                if (!note.archived)
                   PopupMenuItem<String>(
                     value: 'pin',
                     child: Row(
@@ -121,34 +121,34 @@ class NoteTile extends StatelessWidget {
                       ],
                     ),
                   ),
-                if (!note.trashed && onTrash != null)
+                if (!note.archived && onArchive != null)
                   PopupMenuItem<String>(
-                    value: 'trash',
+                    value: 'archive',
                     child: Row(
                       children: [
-                        const Icon(Icons.delete_outline, size: 18),
+                        const Icon(Icons.archive_outlined, size: 18),
                         const SizedBox(width: 8),
-                        Text(s.delete),
+                        Text(s.archive),
                       ],
                     ),
                   ),
-                if (note.trashed)
+                if (note.archived)
                   PopupMenuItem<String>(
                     value: 'restore',
                     child: Row(
                       children: [
-                        const Icon(Icons.restore, size: 18),
+                        const Icon(Icons.unarchive_outlined, size: 18),
                         const SizedBox(width: 8),
-                        Text(s.restore),
+                        Text(s.unarchive),
                       ],
                     ),
                   ),
-                if (note.trashed)
+                if (note.archived)
                   PopupMenuItem<String>(
                     value: 'forever',
                     child: Row(
                       children: [
-                        const Icon(Icons.error_outline, size: 18),
+                        const Icon(Icons.delete_forever_outlined, size: 18),
                         const SizedBox(width: 8),
                         Text(s.deleteForever),
                       ],

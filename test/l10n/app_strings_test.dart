@@ -18,7 +18,7 @@ void main() {
     for (final language in AppLanguage.values) {
       final strings = AppStrings.forLanguage(language);
       expect(strings.deleteMessage('X'), contains('X'));
-      expect(strings.deletedMessage('Y'), contains('Y'));
+      expect(strings.archivedMessage('Y'), contains('Y'));
     }
   });
 

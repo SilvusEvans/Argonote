@@ -7,13 +7,16 @@ import 'package:argonote/app.dart';
 import 'package:argonote/data/in_memory_note_repository.dart';
 import 'package:argonote/data/in_memory_notebook_repository.dart';
 import 'package:argonote/data/in_memory_settings_repository.dart';
+import 'package:argonote/data/note_repository.dart';
 import 'package:argonote/l10n/app_strings.dart';
 import 'package:argonote/models/note.dart';
 import 'package:argonote/settings/settings_controller.dart';
 
+/// 用例里的断言写的是中文文案，而出厂默认语言是英文，所以显式切到简体中文。
 Future<SettingsController> _createSettingsController() async {
   final controller = SettingsController(InMemorySettingsRepository());
   await controller.load();
+  await controller.setLanguage(AppLanguage.simplifiedChinese);
   return controller;
 }
 
@@ -37,6 +40,12 @@ Future<void> _press(WidgetTester tester, LogicalKeyboardKey key) async {
   await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
 }
 
+/// 按标题从仓储里取笔记（同一次操作后仓储里往往不止一条，不能用 single）。
+Future<Note> _byTitle(NoteRepository notes, String title) async {
+  final all = await notes.all();
+  return all.firstWhere((note) => note.title == title);
+}
+
 void main() {
   group('桌面三栏 + 多标签', () {
     testWidgets('树显示笔记本/分区，点笔记开标签编辑并自动保存', (WidgetTester tester) async {
@@ -45,7 +54,10 @@ void main() {
       final tree = InMemoryNotebookRepository();
       final nb = await tree.createNotebook('研究');
       final section = await tree.createSection(nb.id, '文献');
+      // 故意不带 notebookId：加载时应按分区反推归属，保住原有的整理结果。
       await notes.create(title: '会议纪要', content: '下周一上线', sectionId: section.id);
+      // 分区可选：不挂分区的笔记落在笔记本的「未分区」行下。
+      await notes.create(title: '散记', content: '随手一条', notebookId: nb.id);
 
       final settings = await _createSettingsController();
       await tester.pumpWidget(
@@ -60,6 +72,7 @@ void main() {
       // 树节点 + 固定视图
       expect(find.text('研究'), findsOneWidget);
       expect(find.text('文献'), findsOneWidget);
+      expect(find.text('未分区'), findsOneWidget);
       expect(find.text('所有笔记'), findsOneWidget);
 
       // 点列表里的笔记 → 编辑器标签出现
@@ -71,7 +84,7 @@ void main() {
       await tester.enterText(find.byKey(const Key('noteContentField')), '补充：记得发议程');
       await tester.pump(const Duration(milliseconds: 900));
       await tester.pumpAndSettle();
-      final saved = (await notes.all()).single;
+      final saved = await _byTitle(notes, '会议纪要');
       expect(saved.content, contains('记得发议程'));
       expect(saved.sectionId, section.id);
 
@@ -79,6 +92,11 @@ void main() {
       await tester.tap(find.text('文献'));
       await tester.pumpAndSettle();
       expect(find.text('会议纪要'), findsOneWidget);
+
+      // 选中「未分区」→ 只剩没挂分区的笔记
+      await tester.tap(find.text('未分区'));
+      await tester.pumpAndSettle();
+      expect(find.text('散记'), findsOneWidget);
 
       await tester.tap(find.text('所有笔记'));
       await tester.pumpAndSettle();
@@ -160,7 +178,7 @@ void main() {
       expect((await notes.all()).length, 1);
     });
 
-    testWidgets('删除进回收站，可在回收站还原', (WidgetTester tester) async {
+    testWidgets('归档进已归档视图，可取消归档还原', (WidgetTester tester) async {
       _useWideScreen(tester);
       final notes = InMemoryNoteRepository(<Note>[
         Note.create(title: '待删笔记', content: 'x'),
@@ -177,24 +195,24 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.more_vert).first);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('删除'));
+      await tester.tap(find.text('归档'));
       await tester.pumpAndSettle();
 
       var saved = (await notes.all()).single;
-      expect(saved.trashed, isTrue);
+      expect(saved.archived, isTrue);
       expect(find.text('待删笔记'), findsNothing);
 
-      // 进入回收站视图并还原
-      await tester.tap(find.text('回收站'));
+      // 进入已归档视图并取消归档
+      await tester.tap(find.text('已归档'));
       await tester.pumpAndSettle();
       expect(find.text('待删笔记'), findsOneWidget);
 
       await tester.tap(find.byIcon(Icons.more_vert).first);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('还原'));
+      await tester.tap(find.text('取消归档'));
       await tester.pumpAndSettle();
       saved = (await notes.all()).single;
-      expect(saved.trashed, isFalse);
+      expect(saved.archived, isFalse);
     });
 
     testWidgets('预览模式渲染 Markdown 与双链', (WidgetTester tester) async {
@@ -298,6 +316,24 @@ void main() {
 
       expect(find.text('All notes'), findsOneWidget);
       expect(settings.settings.language, AppLanguage.english);
+    });
+
+    testWidgets('没有历史设置时用出厂默认语言（英文）', (WidgetTester tester) async {
+      _useWideScreen(tester);
+      final settings = SettingsController(InMemorySettingsRepository());
+      await settings.load();
+      await tester.pumpWidget(
+        ArgonoteApp(
+          noteRepository: InMemoryNoteRepository(),
+          notebookRepository: InMemoryNotebookRepository(),
+          settingsController: settings,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(settings.settings.language, AppLanguage.english);
+      expect(find.text('All notes'), findsWidgets);
+      expect(find.text('所有笔记'), findsNothing);
     });
   });
 }

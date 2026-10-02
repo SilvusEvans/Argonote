@@ -5,10 +5,10 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('AppSettings', () {
-    test('默认值是简体中文 + 默认蓝 + 跟随系统', () {
+    test('默认值是英文 + 默认蓝 + 跟随系统', () {
       final settings = AppSettings.defaults();
 
-      expect(settings.language, AppLanguage.simplifiedChinese);
+      expect(settings.language, AppLanguage.english);
       expect(settings.seedColor, AppSettings.seedColorPresets.first);
       expect(settings.themeMode, ThemeMode.system);
     });
@@ -41,7 +41,7 @@ void main() {
       final settings = AppSettings.defaults().copyWith(themeModeIndex: 1);
 
       expect(settings.themeMode, ThemeMode.light);
-      expect(settings.language, AppLanguage.simplifiedChinese);
+      expect(settings.language, AppLanguage.english);
     });
   });
 

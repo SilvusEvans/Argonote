@@ -37,6 +37,7 @@ class InMemoryNoteRepository implements NoteRepository {
     required String title,
     required String content,
     List<String> tags = const <String>[],
+    String? notebookId,
     String? sectionId,
     bool pinned = false,
   }) async {
@@ -47,6 +48,7 @@ class InMemoryNoteRepository implements NoteRepository {
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
       tags: tags,
+      notebookId: notebookId,
       sectionId: sectionId,
       pinned: pinned,
     );
@@ -60,17 +62,25 @@ class InMemoryNoteRepository implements NoteRepository {
     required String title,
     required String content,
     required List<String> tags,
+    String? notebookId,
     String? sectionId,
   }) async {
     final index = _notes.indexWhere((note) => note.id == id);
     if (index == -1) {
-      return create(title: title, content: content, tags: tags, sectionId: sectionId);
+      return create(
+        title: title,
+        content: content,
+        tags: tags,
+        notebookId: notebookId,
+        sectionId: sectionId,
+      );
     }
     final updated = _notes[index].copyWith(
       title: title,
       content: content,
       updatedAt: _notes[index].bumpedUpdatedAt(),
       tags: tags,
+      notebookId: notebookId,
       sectionId: sectionId,
     );
     _notes[index] = updated;
@@ -86,19 +96,19 @@ class InMemoryNoteRepository implements NoteRepository {
   }
 
   @override
-  Future<Note> moveToTrash(String id) async {
+  Future<Note> archiveNote(String id) async {
     final index = _notes.indexWhere((note) => note.id == id);
     if (index == -1) throw StateError('note not found: $id');
-    final trashed = _notes[index].copyWith(trashed: true, deletedAt: DateTime.now());
-    _notes[index] = trashed;
-    return trashed;
+    final archived = _notes[index].copyWith(archived: true, deletedAt: DateTime.now());
+    _notes[index] = archived;
+    return archived;
   }
 
   @override
-  Future<Note> restoreFromTrash(String id) async {
+  Future<Note> unarchiveNote(String id) async {
     final index = _notes.indexWhere((note) => note.id == id);
     if (index == -1) throw StateError('note not found: $id');
-    final restored = _notes[index].copyWith(trashed: false, deletedAt: null);
+    final restored = _notes[index].copyWith(archived: false, deletedAt: null);
     _notes[index] = restored;
     return restored;
   }
@@ -115,11 +125,24 @@ class InMemoryNoteRepository implements NoteRepository {
   }
 
   @override
-  Future<void> unassignSections(Set<String> sectionIds) async {
+  Future<void> moveNotesToNotebook(Iterable<String> noteIds, String notebookId) async {
+    final targets = noteIds.toSet();
     for (var i = 0; i < _notes.length; i++) {
-      if (_notes[i].sectionId != null && sectionIds.contains(_notes[i].sectionId)) {
-        _notes[i] = _notes[i].copyWith(sectionId: null, updatedAt: _notes[i].updatedAt);
-      }
+      if (!targets.contains(_notes[i].id)) continue;
+      _notes[i] = _notes[i].copyWith(
+        notebookId: notebookId,
+        sectionId: null,
+        updatedAt: _notes[i].updatedAt,
+      );
+    }
+  }
+
+  @override
+  Future<void> clearNoteSections(Iterable<String> noteIds) async {
+    final targets = noteIds.toSet();
+    for (var i = 0; i < _notes.length; i++) {
+      if (!targets.contains(_notes[i].id) || _notes[i].sectionId == null) continue;
+      _notes[i] = _notes[i].copyWith(sectionId: null, updatedAt: _notes[i].updatedAt);
     }
   }
 }

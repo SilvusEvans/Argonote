@@ -22,15 +22,21 @@ import 'package:argonote/app.dart';
 import 'package:argonote/data/in_memory_note_repository.dart';
 import 'package:argonote/data/in_memory_notebook_repository.dart';
 import 'package:argonote/data/in_memory_settings_repository.dart';
+import 'package:argonote/l10n/app_strings.dart';
+import 'package:argonote/models/app_settings.dart';
 import 'package:argonote/models/note.dart';
 import 'package:argonote/models/notebook.dart';
 import 'package:argonote/settings/settings_controller.dart';
+import 'package:argonote/widgets/markdown_view.dart';
 import 'package:argonote/widgets/tab_strip.dart';
 
 final GlobalKey _boundaryKey = GlobalKey();
 final String _outDir = Platform.environment['ARGONOTE_SHOT_DIR'] ?? 'D:/tmp/runtime';
 int _pointerSeq = 10;
 final bool _wideMode = Platform.environment['ARGONOTE_WIDE'] == '1';
+
+/// 空库模式：只验证首次运行的兜底建库与归属继承。
+final bool _freshMode = Platform.environment['ARGONOTE_FRESH'] == '1';
 int _failures = 0;
 
 void _fail(String message) {
@@ -38,7 +44,7 @@ void _fail(String message) {
   print('FAIL $message');
 }
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   Directory(_outDir).createSync(recursive: true);
 
@@ -70,10 +76,16 @@ void main() {
           'Emoji：👨‍👩‍👧‍👑 家庭 / 🇨🇳 国旗 / 👨🏽‍💻 职业+肤色\n\n'
           '```dart\nfinal 列表 = <String>[\'α β γ\', \'你好，世界\'];\nprint(列表);\n```\n\n'
           '| 名称 | 说明 |\n|---|---|\n| 甲 | 第一行 |\n| 乙 | 第二行 |\n\n'
+          '> 引用块第一行\n> 引用块第二行\n\n'
+          '行内 `code` 与 **粗体**，下面是单换行：\n紧接着的这一行\n\n'
+          '- 列表甲\n- 列表乙\n\n'
+          '1. 有序一\n2. 有序二\n\n'
+          '---\n\n'
           '双链：[[另一页]] 与 [链接](https://example.com)\n',
       createdAt: now,
       updatedAt: now,
       tags: <String>['测试', '中文'],
+      notebookId: 'nb-work',
       sectionId: 's-standup',
       pinned: true,
     ),
@@ -83,28 +95,46 @@ void main() {
       content: '被 [[周会纪要 · 字符回归测试]] 引用的页面。\n\n- 列表项\n- 第二项 🎉\n',
       createdAt: now,
       updatedAt: now,
+      notebookId: 'nb-work',
       sectionId: 's-standup',
     ),
     Note(
       id: 'n-3',
       title: '零散想法',
-      content: '未归入任何分区的页面，应该出现在「未分组」里。',
+      content: '这条笔记只有笔记本、没有分区，应当出现在「未分区」行下。',
       createdAt: now,
       updatedAt: now,
+      notebookId: 'nb-work',
     ),
     Note(
       id: 'n-4',
       title: '待清理',
-      content: '回收站里的页面，默认列表不该看到它。',
+      content: '归档里的页面，默认列表不该看到它。',
       createdAt: now,
       updatedAt: now,
+      notebookId: 'nb-work',
       sectionId: 's-ideas',
-      trashed: true,
+      archived: true,
       deletedAt: now,
     ),
   ];
 
   final settingsController = SettingsController(InMemorySettingsRepository());
+
+  // 出厂默认语言现在是英文，而下面的断言全部写的是中文文案，
+  // 所以显式切回简体中文；默认语言本身由 _drive 开头的专项检查负责。
+  await settingsController.setLanguage(AppLanguage.simplifiedChinese);
+  if (AppSettings.defaults().language != AppLanguage.english) {
+    _fail('出厂默认语言应为英文');
+  }
+
+  if (_freshMode) {
+    // 空库：什么都没有了，看应用会不会自己建出默认笔记本。
+    notebooks.clear();
+    groups.clear();
+    sections.clear();
+    notes.clear();
+  }
 
   final Widget app = RepaintBoundary(
     key: _boundaryKey,
@@ -314,6 +344,62 @@ int _tabCount() {
   return -1;
 }
 
+/// 标签条里每个标签胶囊的实际宽度，用于验证宽度确实跟着标题走。
+List<double> _tabWidths() {
+  final widths = <double>[];
+  for (final element in _allElements()) {
+    if (element.widget is! AnimatedContainer) continue;
+    var underTabStrip = false;
+    element.visitAncestorElements((ancestor) {
+      if (ancestor.widget is! TabStrip) return true;
+      underTabStrip = true;
+      return false;
+    });
+    if (!underTabStrip) continue;
+    final box = element.renderObject;
+    if (box is RenderBox && box.hasSize) widths.add(box.size.width);
+  }
+  return widths;
+}
+
+/// 预览正文必须真的撑满所在容器的宽度。
+///
+/// 踩过的坑：NoteEditor 外层 Column 漏写 crossAxisAlignment，默认的 center
+/// 会把「按内容取宽」的预览整块漂到中间，看起来像文字自动居中。
+/// 三栏下预览本来就不从窗口 0 点开始，所以只能相对外层容器判定。
+void _expectPreviewStretched(String what) {
+  for (final element in _allElements()) {
+    if (element.widget is! MarkdownView) continue;
+    final box = element.renderObject;
+    if (box is! RenderBox || !box.hasSize) {
+      _fail('$what: 预览没有渲染尺寸');
+      return;
+    }
+    RenderBox? host;
+    element.visitAncestorElements((ancestor) {
+      final render = ancestor.renderObject;
+      if (render is RenderBox && render.hasSize && render != box) {
+        host = render;
+        return false;
+      }
+      return true;
+    });
+    final hostBox = host;
+    if (hostBox == null) {
+      _fail('$what: 找不到预览的外层容器');
+      return;
+    }
+    final inset = box.localToGlobal(Offset.zero).dx - hostBox.localToGlobal(Offset.zero).dx;
+    final slack = hostBox.size.width - box.size.width;
+    print('PREVIEW $what inset=${inset.toStringAsFixed(1)} '
+        'width=${box.size.width.toStringAsFixed(1)} host=${hostBox.size.width.toStringAsFixed(1)}');
+    if (inset > 40) _fail('$what: 预览左边距 ${inset.toStringAsFixed(1)}，被水平居中了');
+    if (slack > 80) _fail('$what: 预览比容器窄 ${slack.toStringAsFixed(0)}px，没撑开');
+    return;
+  }
+  _fail('$what: 界面上找不到预览内容');
+}
+
 void _expectNoText(String needle, String what) {
   for (final element in _allElements()) {
     final widget = element.widget;
@@ -325,6 +411,11 @@ void _expectNoText(String needle, String what) {
 }
 
 Future<void> _drive(SettingsController settingsController) async {
+  if (_freshMode) {
+    await _driveFresh();
+    print('DONE failures=$_failures');
+    exit(_failures == 0 ? 0 : 1);
+  }
   if (_wideMode) {
     await _driveWide(settingsController);
     print('DONE failures=$_failures');
@@ -333,11 +424,11 @@ Future<void> _drive(SettingsController settingsController) async {
   await _settle();
   _reportView('initial');
 
-  // A. 默认列表：所有笔记，回收站里的不出现
+  // A. 默认列表：所有笔记，归档里的不出现
   _dumpTexts('list');
   _expectText('所有笔记', '默认范围标题');
   _expectText('周会纪要', '列表里的置顶笔记');
-  _expectNoText('待清理', '回收站隔离');
+  _expectNoText('待清理', '归档隔离');
   await _shot('01_list');
 
   // B. 抽屉里的笔记本树：笔记本 > 分区组 > 分区 三层
@@ -346,13 +437,24 @@ Future<void> _drive(SettingsController settingsController) async {
   _expectText('Personal', '第二个笔记本');
   _expectText('2026 计划', '分区组节点');
   _expectText('读书笔记', '另一个笔记本下的分区');
-  _expectText('未分组', '未分组入口');
+  _expectText('未分区', '每个笔记本下的未分区行');
+  _expectNoText('未分组', '未分组入口已取消');
   await _shot('02_tree');
 
   // C. 选分区 → 抽屉收起，列表按分区筛选
   await _tapText('周会', '分区「周会」');
   _expectText('周会纪要', '分区筛选结果');
-  _expectNoText('零散想法', '分区筛选应排除未分组笔记');
+  _expectNoText('零散想法', '分区筛选不含未分区笔记');
+
+  // C2. 选「未分区」→ 只看该笔记本下没分区的笔记
+  await _tapIcon(Icons.menu, '再次打开抽屉');
+  await _tapText('未分区', '未分区行');
+  _expectText('零散想法', '未分区范围');
+  _expectNoText('周会纪要', '未分区范围排除有分区的笔记');
+  await _shot('03_unsectioned');
+
+  await _tapIcon(Icons.menu, '回到未分区列表');
+  await _tapText('周会', '回到分区「周会」');
   await _shot('03_filtered');
 
   // D. 打开笔记 → 编辑器 + 归属面包屑 + 单标签
@@ -362,15 +464,39 @@ Future<void> _drive(SettingsController settingsController) async {
   if (_tabCount() != 1) _fail('打开笔记后标签数应为 1，实际 ${_tabCount()}');
   await _shot('04_editor');
 
+  // D2. 归属选择器：笔记本必填、分区可选，选分区时笔记本跟着走。
+  //     此时抽屉已收起，同名的树节点不在树上，菜单项是唯一命中。
+  await _tapText('工作笔记本 / 周会', '面包屑打开归属菜单');
+  await _settle(frames: 6);
+  _expectText('Personal 🌍 / 未分区', '归属菜单列出别的笔记本');
+  await _tapText('随想', '归属菜单里的另一个分区');
+  await _settle(frames: 6);
+  _expectText('工作笔记本 / 随想', '换分区后的面包屑');
+  _expectNoText('工作笔记本 / 周会', '旧归属残留');
+  await _shot('04b_picker');
+  await _tapText('工作笔记本 / 随想', '再次打开归属菜单');
+  await _settle(frames: 6);
+  await _tapText('周会', '改回原分区');
+  await _settle(frames: 6);
+  _expectText('工作笔记本 / 周会', '归属改回原状');
+
   // E. Markdown 预览模式
   await _tapIcon(Icons.visibility_outlined, '预览');
   await _settle();
   _dumpTexts('preview');
+  _expectPreviewStretched('纯预览排版');
   await _shot('05_preview');
 
   // F. 新建标签 → 两个标签并存
   await _tapIcon(Icons.add, '新建标签');
   if (_tabCount() != 2) _fail('新建后标签数应为 2，实际 ${_tabCount()}');
+  final widths = _tabWidths();
+  print('TAB-WIDTHS ${widths.map((w) => w.toStringAsFixed(1)).join(' , ')}');
+  if (widths.length != 2) {
+    _fail('量不到 2 个标签的宽度，实际 ${widths.length}');
+  } else if ((widths.first - widths.last).abs() < 40) {
+    _fail('长短标题的标签宽度几乎一样（${widths.map((w) => w.toStringAsFixed(1)).join(' / ')}），说明标签没有随标题自适应');
+  }
   await _shot('06_two_tabs');
 
   // G. 关闭当前标签 → 回到一个
@@ -405,6 +531,7 @@ Future<void> _drive(SettingsController settingsController) async {
   await _tapIcon(Icons.arrow_back, '回到列表');
   await _tapText('周会纪要', '重新打开笔记');
   await _tapIcon(Icons.visibility_outlined, '预览（放大截图前）');
+  _expectPreviewStretched('英文界面下的预览排版');
   await _shot('10_zoom', pixelRatioOverride: 6);
 
   print('DONE failures=$_failures');
@@ -538,14 +665,41 @@ Future<void> _driveWide(SettingsController settingsController) async {
   if (treeX >= listX) _fail('三栏顺序不对：树应在列表左侧');
   _expectText('2026 计划', '分区组节点');
   _expectText('读书笔记', '另一个笔记本下的分区');
-  _expectNoText('待清理', '回收站隔离');
+  _expectNoText('待清理', '归档隔离');
+  _expectText('未分区', '每个笔记本下的未分区行');
   await _shot('w1_three_panes');
+
+  // 未分区行：只看该笔记本下没挂分区的笔记（分区是可选的，笔记本才是必填）
+  await _tapText('未分区', '工作笔记本的未分区行');
+  await _settle(frames: 4);
+  _expectText('零散想法', '未分区范围');
+  _expectNoText('另一页', '未分区范围排除有分区的笔记');
+  _expectNoText('周会纪要', '未分区范围排除有分区的笔记');
+  await _shot('w1b_unsectioned_scope');
+
+  await _tapText('工作笔记本', '笔记本范围');
+  await _settle(frames: 4);
+  _expectText('周会纪要', '笔记本范围含分区与未分区的笔记');
+  _expectText('零散想法', '笔记本范围含未分区笔记');
+  await _shot('w1c_notebook_scope');
 
   // 点笔记 → 右栏编辑器 + 单标签
   await _tapText('周会纪要', '笔记条目');
   if (_tabCount() != 1) _fail('打开笔记后标签数应为 1，实际 ${_tabCount()}');
   _expectText('工作笔记本 / 周会', '面包屑');
   await _shot('w2_editor');
+
+  // 三栏下的预览排版：整块必须贴左撑开，不能漂到中间。
+  await _tapIcon(Icons.visibility_outlined, '纯预览');
+  await _settle();
+  _expectPreviewStretched('三栏纯预览');
+  await _shot('w9_preview');
+  await _tapIcon(Icons.view_column_outlined, '分栏预览');
+  await _settle();
+  _expectPreviewStretched('三栏分栏预览');
+  await _shot('w10_split');
+  await _tapIcon(Icons.edit_outlined, '回到编辑');
+  await _settle();
 
   // 桌面快捷键：Ctrl+N 新建标签。
   // 这里刻意不先点进输入框：只点过列表条目时 primaryFocus 还在最外层
@@ -574,5 +728,50 @@ Future<void> _driveWide(SettingsController settingsController) async {
   _expectNoText('零散想法', '分区筛选');
   if (_tabCount() != 1) _fail('切分区后标签应还在，实际 ${_tabCount()}');
   await _shot('w6_section_switch');
+
+  // 点笔记本行：中间列只看它自己分区里的笔记，行本身保持展开（#17 三栏语义）
+  await _tapText('工作笔记本', '笔记本工作笔记本');
+  await _settle(frames: 4);
+  _dumpTexts('after-work-tap');
+  _expectText('零散想法', '笔记本范围含其全部分区的笔记');
+  _expectNoText('待清理', '笔记本范围排除归档笔记');
+  await _shot('w7_notebook_scope');
+
+  await _tapText('Personal', '笔记本 Personal');
+  await _settle(frames: 4);
+  _expectText('还没有笔记', '切到空笔记本只剩它自己的笔记');
+  _expectNoText('零散想法', '别的笔记本笔记被排除');
+  await _shot('w8_other_notebook');
   print('SETTINGS locale=${settingsController.settings.locale}');
+}
+
+/// 空库首启：默认笔记本自动建出来，新笔记一定带笔记本归属、分区留空。
+Future<void> _driveFresh() async {
+  await _settle(frames: 8);
+  await _forceWideLayout();
+  _reportView('fresh');
+
+  _dumpTexts('fresh-boot');
+  _expectText('我的笔记本', '首启自动创建的默认笔记本');
+  _expectText('未分区', '首启笔记本下的未分区行');
+  _expectNoText('快速笔记', '不再自动建默认分区');
+  _expectNoText('未分组', '未分组入口已取消');
+  _expectText('还没有笔记', '空列表提示');
+  await _shot('f1_boot');
+
+  // 新建笔记：草稿必须继承当前笔记本，面包屑显示「我的笔记本 / 未分区」。
+  await _tapText('写笔记', '新建笔记');
+  await _settle(frames: 4);
+  _expectText('我的笔记本 / 未分区', '草稿继承笔记本');
+  if (_tabCount() != 1) _fail('新建后应有 1 个标签，实际 ${_tabCount()}');
+  await _shot('f2_draft');
+
+  // 草稿标题留空，保存时不该落库成一条空白笔记。
+  await _pressCtrl(PhysicalKeyboardKey.keyW, LogicalKeyboardKey.keyW);
+  await _settle(frames: 4);
+  // 标签清零后 TabStrip 不再存在，_tabCount() 返回 -1，等价于 0 个标签。
+  final tabs = _tabCount();
+  if (tabs > 0) _fail('关闭空草稿后标签应清空，实际 $tabs');
+  _expectText('还没有笔记', '空草稿不落库');
+  await _shot('f3_empty_kept');
 }

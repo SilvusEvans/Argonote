@@ -11,6 +11,7 @@ import '../models/note_filter.dart';
 import '../models/note_tab.dart';
 import '../models/notebook.dart';
 import '../settings/settings_controller.dart';
+import '../utils/popup_anchor.dart';
 import '../widgets/note_editor.dart';
 import '../widgets/note_tile.dart';
 import '../widgets/notebook_tree.dart';
@@ -20,7 +21,7 @@ import 'settings_screen.dart';
 /// 桌面三栏外壳：左笔记本树 / 中页面列表 / 右多标签编辑器。
 ///
 /// 窄屏时树收进 Drawer，列表与编辑器整屏切换。
-/// 所有落库动作集中在这里：防抖自动保存、回收站、置顶、树节点 CRUD。
+/// 所有落库动作集中在这里：防抖自动保存、归档、置顶、树节点 CRUD。
 class HomeShell extends StatefulWidget {
   const HomeShell({
     super.key,
@@ -94,38 +95,115 @@ class _HomeShellState extends State<HomeShell> {
       _sections = results[3] as List<Section>;
       _loading = false;
     });
+    await _ensureDefaults();
+  }
+
+  /// 首次运行（或旧数据迁移后）兜底建出默认笔记本，并修复没有有效归属的笔记。
+  ///
+  /// 不变式：每条笔记必须归属一个存在的笔记本；分区可选，且必须属于它自己
+  /// 所在的那个笔记本。旧数据只有 sectionId（没有 notebookId），这里按分区反推出
+  /// 笔记本，尽量保住用户原有的整理结果；分区被删或被跨笔记本移动后留下的
+  /// 悬空 sectionId 一律置空，笔记落到该笔记本的「未分区」下。
+  ///
+  /// 「按分区补笔记本」只改内存（下次保存自然落库），不为一次性迁移再开写接口；
+  /// 会丢数据的那两类修复（挪笔记本、清悬空分区）直接落库。
+  Future<void> _ensureDefaults() async {
+    final strings = AppStrings.of(context);
+    final notebooks = _notebooks.isEmpty
+        ? [await widget.notebookRepository.createNotebook(strings.defaultNotebook)]
+        : _notebooks;
+    final fallbackId = notebooks.first.id;
+
+    final validNotebooks = <String>{for (final item in notebooks) item.id};
+    final notebookOfSection = <String, String>{
+      for (final section in _sections) section.id: section.notebookId,
+    };
+
+    final repaired = <String, Note>{};
+    final moveToNotebook = <String>[]; // 完全没有笔记本：收进兜底笔记本并清空分区
+    final clearSection = <String>[]; // 只需清空分区
+    for (final note in _notes) {
+      final notebookId = note.notebookId;
+      final sectionId = note.sectionId;
+      if (notebookId == null || !validNotebooks.contains(notebookId)) {
+        final inferred = sectionId == null ? null : notebookOfSection[sectionId];
+        if (inferred != null) {
+          repaired[note.id] = note.copyWith(notebookId: inferred, updatedAt: note.updatedAt);
+        } else {
+          moveToNotebook.add(note.id);
+          repaired[note.id] =
+              note.copyWith(notebookId: fallbackId, sectionId: null, updatedAt: note.updatedAt);
+        }
+        continue;
+      }
+      if (sectionId != null && notebookOfSection[sectionId] != notebookId) {
+        clearSection.add(note.id);
+        repaired[note.id] = note.copyWith(sectionId: null, updatedAt: note.updatedAt);
+      }
+    }
+
+    if (moveToNotebook.isNotEmpty) {
+      await widget.noteRepository.moveNotesToNotebook(moveToNotebook, fallbackId);
+    }
+    if (clearSection.isNotEmpty) {
+      await widget.noteRepository.clearNoteSections(clearSection);
+    }
+    final isNewInstall = notebooks.length != _notebooks.length;
+    if ((!isNewInstall && repaired.isEmpty) || !mounted) return;
+    setState(() {
+      _notebooks = notebooks;
+      _notes = [for (final note in _notes) repaired[note.id] ?? note];
+    });
   }
 
   // ---------------------------------------------------------------- 派生数据
-
-  Set<String> _sectionIdsOfNotebook(String notebookId) => {
-        for (final section in _sections)
-          if (section.notebookId == notebookId) section.id,
-      };
 
   Set<String> _sectionIdsOfGroup(String groupId) => {
         for (final section in _sections)
           if (section.groupId == groupId) section.id,
       };
 
+  String? _notebookIdOfSection(String sectionId) {
+    for (final section in _sections) {
+      if (section.id == sectionId) return section.notebookId;
+    }
+    return null;
+  }
+
+  String? _notebookIdOfGroup(String groupId) {
+    for (final group in _groups) {
+      if (group.id == groupId) return group.notebookId;
+    }
+    return null;
+  }
+
   Map<String, int> get _sectionCounts {
     final counts = <String, int>{};
     for (final note in _notes) {
-      if (note.trashed || note.sectionId == null) continue;
+      if (note.archived || note.sectionId == null) continue;
       counts[note.sectionId!] = (counts[note.sectionId!] ?? 0) + 1;
     }
     return counts;
   }
 
-  List<Note> get _visibleNotes {
-    Set<String>? sectionIds;
-    if (_scope.kind == NoteScopeKind.notebook) {
-      sectionIds = _sectionIdsOfNotebook(_scope.id!);
-    } else if (_scope.kind == NoteScopeKind.group) {
-      sectionIds = _sectionIdsOfGroup(_scope.id!);
+  /// 各笔记本「未分区」行下的笔记数。
+  Map<String, int> get _unsectionedCounts {
+    final counts = <String, int>{};
+    for (final note in _notes) {
+      if (note.archived || note.sectionId != null) continue;
+      final notebookId = note.notebookId;
+      if (notebookId == null) continue;
+      counts[notebookId] = (counts[notebookId] ?? 0) + 1;
     }
-    return _filter.apply(_notes, _scope, notebookSectionIds: sectionIds);
+    return counts;
   }
+
+  List<Note> get _visibleNotes => _filter.apply(
+        _notes,
+        _scope,
+        groupSectionIds:
+            _scope.kind == NoteScopeKind.group ? _sectionIdsOfGroup(_scope.id!) : null,
+      );
 
   String? _sectionLabelFor(Note note) {
     if (note.sectionId == null) return null;
@@ -163,10 +241,27 @@ class _HomeShellState extends State<HomeShell> {
     });
   }
 
+  /// 兜底笔记本：树里的第一个笔记本。_ensureDefaults 保证它一定存在。
+  String? get _defaultNotebookId => _notebooks.isEmpty ? null : _notebooks.first.id;
+
+  /// 新建笔记的落点：跟随当前范围。笔记本必填；分区只有在「就点在某个分区上」
+  /// 时才带上，其余情况留空——即落在该笔记本的「未分区」下。
+  (String? notebookId, String? sectionId) get _draftPlacement {
+    final id = _scope.id;
+    return switch (_scope.kind) {
+      NoteScopeKind.section => (_notebookIdOfSection(id!) ?? _defaultNotebookId, id),
+      NoteScopeKind.group => (_notebookIdOfGroup(id!), null),
+      NoteScopeKind.notebook || NoteScopeKind.unsectioned => (id, null),
+      _ => (_defaultNotebookId, null),
+    };
+  }
+
   void _newDraftTab() {
+    final (notebookId, sectionId) = _draftPlacement;
     final tab = NoteTab(
       id: NoteTab.nextDraftId(),
-      sectionId: _scope.kind == NoteScopeKind.section ? _scope.id : null,
+      notebookId: notebookId,
+      sectionId: sectionId,
     );
     setState(() {
       _tabs.add(tab);
@@ -229,10 +324,7 @@ class _HomeShellState extends State<HomeShell> {
     try {
       final title = tab.titleController.text;
       final content = tab.contentController.text;
-      final blank = title.trim().isEmpty &&
-          content.trim().isEmpty &&
-          tab.tags.isEmpty &&
-          tab.sectionId == null;
+      final blank = title.trim().isEmpty && content.trim().isEmpty && tab.tags.isEmpty;
 
       if (!tab.isPersisted) {
         // 空草稿不落库，避免一堆空白笔记。
@@ -241,6 +333,7 @@ class _HomeShellState extends State<HomeShell> {
           title: title,
           content: content,
           tags: tab.tags,
+          notebookId: tab.notebookId,
           sectionId: tab.sectionId,
           pinned: tab.pinned,
         );
@@ -248,8 +341,8 @@ class _HomeShellState extends State<HomeShell> {
       } else {
         final id = tab.note!.id;
         if (blank) {
-          // 已有笔记被清空：与旧版一致，进回收站并关闭标签。
-          await widget.noteRepository.moveToTrash(id);
+          // 已有笔记被清空：与旧版一致，归档并关闭标签。
+          await widget.noteRepository.archiveNote(id);
           tab.dirty = false;
           if (!silent && mounted) await _closeTab(tab);
           return;
@@ -259,6 +352,7 @@ class _HomeShellState extends State<HomeShell> {
           title: title,
           content: content,
           tags: tab.tags,
+          notebookId: tab.notebookId,
           sectionId: tab.sectionId,
         );
       }
@@ -281,8 +375,8 @@ class _HomeShellState extends State<HomeShell> {
 
   // ---------------------------------------------------------------- 笔记动作
 
-  Future<void> _trashNote(Note note) async {
-    await widget.noteRepository.moveToTrash(note.id);
+  Future<void> _archiveNote(Note note) async {
+    await widget.noteRepository.archiveNote(note.id);
     for (final tab in [..._tabs]) {
       if (tab.note?.id == note.id) await _closeTab(tab);
     }
@@ -294,11 +388,11 @@ class _HomeShellState extends State<HomeShell> {
       ..clearSnackBars()
       ..showSnackBar(
         SnackBar(
-          content: Text(strings.deletedMessage(_titleOf(note, strings))),
+          content: Text(strings.archivedMessage(_titleOf(note, strings))),
           action: SnackBarAction(
             label: strings.undo,
             onPressed: () async {
-              await widget.noteRepository.restoreFromTrash(note.id);
+              await widget.noteRepository.unarchiveNote(note.id);
               _load();
             },
           ),
@@ -310,7 +404,7 @@ class _HomeShellState extends State<HomeShell> {
       note.displayTitle.isEmpty ? strings.untitled : note.displayTitle;
 
   Future<void> _restoreNote(Note note) async {
-    await widget.noteRepository.restoreFromTrash(note.id);
+    await widget.noteRepository.unarchiveNote(note.id);
     await _load();
   }
 
@@ -342,15 +436,15 @@ class _HomeShellState extends State<HomeShell> {
     }
   }
 
-  Future<void> _emptyTrash() async {
+  Future<void> _emptyArchive() async {
     final strings = AppStrings.of(context);
-    final trashed = _notes.where((note) => note.trashed).toList();
-    if (trashed.isEmpty) return;
+    final archived = _notes.where((note) => note.archived).toList();
+    if (archived.isEmpty) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(strings.emptyTrash),
-        content: Text(strings.emptyTrashConfirm),
+        title: Text(strings.emptyArchive),
+        content: Text(strings.emptyArchiveConfirm),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -364,7 +458,7 @@ class _HomeShellState extends State<HomeShell> {
       ),
     );
     if (!(confirmed ?? false)) return;
-    for (final note in trashed) {
+    for (final note in archived) {
       await widget.noteRepository.delete(note.id);
     }
     await _load();
@@ -381,7 +475,7 @@ class _HomeShellState extends State<HomeShell> {
     final wanted = title.toLowerCase();
     Note? match;
     for (final note in _notes) {
-      if (note.trashed) continue;
+      if (note.archived) continue;
       if (note.displayTitle.toLowerCase() == wanted) {
         match = note;
         break;
@@ -517,9 +611,18 @@ class _HomeShellState extends State<HomeShell> {
     final strings = AppStrings.of(context);
     if (node is Notebook) {
       if (!await _confirm(strings.deleteNotebookTitle, strings.deleteNotebookMessage)) return;
-      final removed = await widget.notebookRepository.deleteNotebook(node.id);
-      await widget.noteRepository.unassignSections(removed);
-      if (_scope.kind == NoteScopeKind.notebook && _scope.id == node.id) {
+      final orphans = [for (final note in _notes) if (note.notebookId == node.id) note.id];
+      await widget.notebookRepository.deleteNotebook(node.id);
+      if (orphans.isNotEmpty) {
+        // 笔记本不能没有，所以先兜底出一个再收拢，避免中间态违反不变式。
+        final remaining = await widget.notebookRepository.notebooks();
+        final target = remaining.isEmpty
+            ? await widget.notebookRepository.createNotebook(strings.defaultNotebook)
+            : remaining.first;
+        await widget.noteRepository.moveNotesToNotebook(orphans, target.id);
+      }
+      if ((_scope.kind == NoteScopeKind.notebook || _scope.kind == NoteScopeKind.unsectioned) &&
+          _scope.id == node.id) {
         _scope = NoteScope.all;
       }
     } else if (node is SectionGroup) {
@@ -530,8 +633,11 @@ class _HomeShellState extends State<HomeShell> {
       }
     } else if (node is Section) {
       if (!await _confirm(strings.deleteSectionTitle, strings.deleteSectionMessage)) return;
+      final orphans = [for (final note in _notes) if (note.sectionId == node.id) note.id];
       await widget.notebookRepository.deleteSection(node.id);
-      await widget.noteRepository.unassignSections({node.id});
+      if (orphans.isNotEmpty) {
+        await widget.noteRepository.clearNoteSections(orphans);
+      }
       if (_scope.kind == NoteScopeKind.section && _scope.id == node.id) {
         _scope = NoteScope.all;
       }
@@ -554,10 +660,10 @@ class _HomeShellState extends State<HomeShell> {
       groups: _groups,
       sections: _sections,
       sectionCounts: _sectionCounts,
-      totalCount: _notes.where((n) => !n.trashed).length,
-      pinnedCount: _notes.where((n) => !n.trashed && n.pinned).length,
-      trashCount: _notes.where((n) => n.trashed).length,
-      unfiledCount: _notes.where((n) => !n.trashed && n.sectionId == null).length,
+      unsectionedCounts: _unsectionedCounts,
+      totalCount: _notes.where((n) => !n.archived).length,
+      pinnedCount: _notes.where((n) => !n.archived && n.pinned).length,
+      archivedCount: _notes.where((n) => n.archived).length,
       selected: _scope,
       onSelected: (scope) {
         setState(() => _scope = scope);
@@ -678,7 +784,7 @@ class _HomeShellState extends State<HomeShell> {
 
   Widget _buildListPane(AppStrings strings, bool wide) {
     final visible = _visibleNotes;
-    final tags = NoteFilter.collectTags(_notes.where((n) => !n.trashed));
+    final tags = NoteFilter.collectTags(_notes.where((n) => !n.archived));
 
     return Column(
       children: [
@@ -696,13 +802,15 @@ class _HomeShellState extends State<HomeShell> {
                       ),
                 ),
               ),
-              IconButton(
-                tooltip: strings.sortBy,
-                icon: const Icon(Icons.sort),
-                onPressed: _showSortMenu,
+              Builder(
+                builder: (anchorContext) => IconButton(
+                  tooltip: strings.sortBy,
+                  icon: const Icon(Icons.sort),
+                  onPressed: () => _showSortMenu(anchorContext),
+                ),
               ),
-              if (_scope.kind == NoteScopeKind.trash)
-                TextButton(onPressed: _emptyTrash, child: Text(strings.emptyTrash)),
+              if (_scope.kind == NoteScopeKind.archived)
+                TextButton(onPressed: _emptyArchive, child: Text(strings.emptyArchive)),
               IconButton(
                 tooltip: strings.newNote,
                 icon: const Icon(Icons.add_circle_outline),
@@ -762,7 +870,7 @@ class _HomeShellState extends State<HomeShell> {
                       strings: strings,
                       onTap: () => _openNoteTab(note),
                       onPinToggle: () => _togglePinFromList(note),
-                      onTrash: _scope.kind == NoteScopeKind.trash ? null : () => _trashNote(note),
+                      onArchive: _scope.kind == NoteScopeKind.archived ? null : () => _archiveNote(note),
                       onRestore: () => _restoreNote(note),
                       onDeleteForever: () => _deleteForever(note),
                     );
@@ -779,12 +887,12 @@ class _HomeShellState extends State<HomeShell> {
         return strings.allNotes;
       case NoteScopeKind.pinned:
         return strings.pinnedScope;
-      case NoteScopeKind.trash:
-        return strings.trash;
-      case NoteScopeKind.unfiled:
-        return strings.unfiled;
+      case NoteScopeKind.archived:
+        return strings.archived;
       case NoteScopeKind.section:
         return _sections.firstWhere((s) => s.id == _scope.id, orElse: () => Section.create(notebookId: '', name: strings.sectionLabel)).name;
+      case NoteScopeKind.unsectioned:
+        return '${_notebooks.firstWhere((n) => n.id == _scope.id, orElse: () => Notebook.create(strings.notebookLabel)).name} / ${strings.unsectioned}';
       case NoteScopeKind.notebook:
         return _notebooks.firstWhere((n) => n.id == _scope.id, orElse: () => Notebook.create(strings.notebookLabel)).name;
       case NoteScopeKind.group:
@@ -794,7 +902,7 @@ class _HomeShellState extends State<HomeShell> {
 
   Widget _buildEmptyList(AppStrings strings) {
     final filtered = !_filter.isEmpty;
-    final inTrash = _scope.kind == NoteScopeKind.trash;
+    final inArchive = _scope.kind == NoteScopeKind.archived;
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -802,14 +910,14 @@ class _HomeShellState extends State<HomeShell> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              inTrash ? Icons.delete_outline : (filtered ? Icons.filter_alt_off_outlined : Icons.note_alt_outlined),
+              inArchive ? Icons.archive_outlined: (filtered ? Icons.filter_alt_off_outlined : Icons.note_alt_outlined),
               size: 56,
               color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.6),
             ),
             const SizedBox(height: 12),
             Text(
-              inTrash
-                  ? strings.trashEmpty
+              inArchive
+                  ? strings.archiveEmpty
                   : filtered
                       ? strings.noMatchTitle
                       : strings.emptyTitle,
@@ -817,7 +925,7 @@ class _HomeShellState extends State<HomeShell> {
             ),
             const SizedBox(height: 6),
             Text(
-              inTrash ? '' : (filtered ? strings.noMatchSubtitle : strings.emptySubtitle),
+              inArchive ? '' : (filtered ? strings.noMatchSubtitle : strings.emptySubtitle),
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(context)
                         .textTheme
@@ -833,11 +941,11 @@ class _HomeShellState extends State<HomeShell> {
     );
   }
 
-  void _showSortMenu() {
+  void _showSortMenu(BuildContext anchor) {
     final strings = AppStrings.of(context);
     showMenu<String>(
       context: context,
-      position: RelativeRect.fromLTRB(100, 100, 0, 0),
+      position: menuRectBelow(anchor),
       items: <PopupMenuEntry<String>>[
         for (final sort in NoteSort.values)
           PopupMenuItem<String>(

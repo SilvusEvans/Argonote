@@ -38,6 +38,7 @@ class SharedPrefsNoteRepository implements NoteRepository {
     required String title,
     required String content,
     List<String> tags = const <String>[],
+    String? notebookId,
     String? sectionId,
     bool pinned = false,
   }) async {
@@ -49,6 +50,7 @@ class SharedPrefsNoteRepository implements NoteRepository {
       createdAt: now,
       updatedAt: now,
       tags: tags,
+      notebookId: notebookId,
       sectionId: sectionId,
       pinned: pinned,
     );
@@ -63,19 +65,27 @@ class SharedPrefsNoteRepository implements NoteRepository {
     required String title,
     required String content,
     required List<String> tags,
+    String? notebookId,
     String? sectionId,
   }) async {
     final notes = await _readAll();
     final index = notes.indexWhere((note) => note.id == id);
     if (index == -1) {
       // 目标不存在时退化成新增，避免调用方拿到空而崩。
-      return create(title: title, content: content, tags: tags, sectionId: sectionId);
+      return create(
+        title: title,
+        content: content,
+        tags: tags,
+        notebookId: notebookId,
+        sectionId: sectionId,
+      );
     }
     final updated = notes[index].copyWith(
       title: title,
       content: content,
       updatedAt: notes[index].bumpedUpdatedAt(),
       tags: tags,
+      notebookId: notebookId,
       sectionId: sectionId,
     );
     notes[index] = updated;
@@ -90,13 +100,13 @@ class SharedPrefsNoteRepository implements NoteRepository {
       });
 
   @override
-  Future<Note> moveToTrash(String id) => _patch(id, (note) {
-        return note.copyWith(trashed: true, deletedAt: DateTime.now(), updatedAt: note.updatedAt);
+  Future<Note> archiveNote(String id) => _patch(id, (note) {
+        return note.copyWith(archived: true, deletedAt: DateTime.now(), updatedAt: note.updatedAt);
       });
 
   @override
-  Future<Note> restoreFromTrash(String id) => _patch(id, (note) {
-        return note.copyWith(trashed: false, deletedAt: null, updatedAt: note.updatedAt);
+  Future<Note> unarchiveNote(String id) => _patch(id, (note) {
+        return note.copyWith(archived: false, deletedAt: null, updatedAt: note.updatedAt);
       });
 
   @override
@@ -115,16 +125,31 @@ class SharedPrefsNoteRepository implements NoteRepository {
   }
 
   @override
-  Future<void> unassignSections(Set<String> sectionIds) async {
-    if (sectionIds.isEmpty) return;
+  Future<void> moveNotesToNotebook(Iterable<String> noteIds, String notebookId) async {
+    final targets = noteIds.toSet();
     final notes = await _readAll();
     var changed = false;
     for (var i = 0; i < notes.length; i++) {
-      final sectionId = notes[i].sectionId;
-      if (sectionId != null && sectionIds.contains(sectionId)) {
-        notes[i] = notes[i].copyWith(sectionId: null, updatedAt: notes[i].updatedAt);
-        changed = true;
-      }
+      if (!targets.contains(notes[i].id)) continue;
+      notes[i] = notes[i].copyWith(
+        notebookId: notebookId,
+        sectionId: null,
+        updatedAt: notes[i].updatedAt,
+      );
+      changed = true;
+    }
+    if (changed) await _writeAll(notes);
+  }
+
+  @override
+  Future<void> clearNoteSections(Iterable<String> noteIds) async {
+    final targets = noteIds.toSet();
+    final notes = await _readAll();
+    var changed = false;
+    for (var i = 0; i < notes.length; i++) {
+      if (!targets.contains(notes[i].id) || notes[i].sectionId == null) continue;
+      notes[i] = notes[i].copyWith(sectionId: null, updatedAt: notes[i].updatedAt);
+      changed = true;
     }
     if (changed) await _writeAll(notes);
   }

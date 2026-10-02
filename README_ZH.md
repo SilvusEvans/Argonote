@@ -12,23 +12,24 @@
 
 | 功能 | 说明 |
 | --- | --- |
-| 笔记本体系 | OneNote 风格层级：笔记本 > 分区组（可选）> 分区 > 页面；左侧树支持新建 / 重命名 / 删除，删父级不丢笔记（降级为「未分组」）。旧版文件夹数据启动时自动迁移成分区 |
+| 笔记本体系 | OneNote 风格层级：笔记本 > 分区组（可选）> 分区（可选）> 页面；左侧树支持新建 / 重命名 / 删除。一条笔记必须归属一个笔记本，分区可以留空——没分区的笔记落在每个笔记本都有的「未分区」行下。首次运行自动建出「我的笔记本」；删笔记本会把笔记并进另一个笔记本的「未分区」，删分区只是解除分区。旧版文件夹数据启动时自动迁移成分区 |
 | 多标签页 | 桌面宽屏三栏（树 / 页面列表 / 编辑器），编辑器可同时打开多篇笔记为标签；未保存显示圆点、右键可关闭其它/全部标签；窄屏自动回退整屏编辑 |
 | 新建 / 编辑 | 列表右上角「+」新建标签页；输入停顿 800ms 自动保存，关标签、切走也不丢 |
 | 三视图 | 编辑 / 分栏（左写右渲）/ 预览三种模式一键切换 |
 | 编辑工具栏 | 加粗、斜体、标题、列表、任务列表、代码、引用、链接、表格、分割线一键插入，已包裹的内容再点即剥离 |
 | Markdown 双链 | 正文写 `[[另一页标题]]`，预览点击直接打开对应笔记标签页 |
+| 预览断行 | 段落里单个换行即断行（预览前把相邻普通文字行补成 Markdown 硬换行；围栏代码、列表、表格、标题、引用仍按 CommonMark 规则）。行内代码有底色框，`` `code` `` 在正文里也看得出来 |
 | 统计 | 实时显示字符（按字素簇，emoji/中文不拆坏）、字数、行数 |
 | 复制为 Markdown | 一键把「标题 + 正文」复制到剪贴板，方便导出 |
 | 置顶 | 任意笔记可置顶，永远排在列表最前；左树有「置顶」视图 |
-| 回收站 | 删除先进回收站（软删除），可还原或彻底删除，支持一键清空；列表删除的 SnackBar 仍可撤销 |
-| 搜索 | 左树定位范围（全部 / 笔记本 / 分区 / 未分组）+ 关键词实时过滤标题 / 正文 / 标签 |
+| 归档 | 列表菜单里的「归档」是软删除，笔记进左树「已归档」视图，可取消归档或彻底删除，支持一键清空归档；归档的 SnackBar 仍可撤销 |
+| 搜索 | 左树定位范围（全部 / 置顶 / 已归档 / 笔记本 / 未分区 / 分区组 / 分区）+ 关键词实时过滤标题 / 正文 / 标签 |
 | 排序 | 最近修改 / 最近创建 / 标题升序，三种可切换 |
 | 字符显示修复 | 摘要截断与工具栏编辑都按字素簇切分，选区端点落在半截 emoji 上时自动外扩到完整字素，不再产生孤立代理对（渲染成替换符） |
 | 标签 | 每条笔记可打多个标签，列表有标签快筛条 |
-| 界面语言 | 简体中文 / English / 日本語 / 繁體中文，立即生效并记住选择 |
+| 界面语言 | 默认英文，可切简体中文 / English / 日本語 / 繁體中文，立即生效并记住选择 |
 | 主题配色 | 6 种主色 + 跟随系统 / 浅色 / 深色 |
-| 空笔记处理 | 全空的新笔记不落库；把已有笔记清空则自动进回收站 |
+| 空笔记处理 | 全空的新笔记不落库；把已有笔记清空则自动归档 |
 
 ## 目录结构
 
@@ -37,7 +38,7 @@ lib/
 ├── main.dart                              # 入口：初始化 SharedPreferences，注入仓储与设置控制器
 ├── app.dart                               # MaterialApp：主题、语言、本地化、首页 HomeShell
 ├── models/
-│   ├── note.dart                          # 页面（笔记）模型 + JSON 序列化（分区/置顶/回收站/字素统计）
+│   ├── note.dart                          # 页面（笔记）模型 + JSON 序列化（笔记本/分区/置顶/归档/字素统计）
 │   ├── notebook.dart                      # 笔记本 / 分区组 / 分区 模型
 │   ├── note_tab.dart                      # 编辑器标签页运行时状态（持有输入控制器）
 │   ├── note_filter.dart                   # 筛选（关键词/标签/排序）+ 左树范围 NoteScope 与匹配逻辑
@@ -57,13 +58,13 @@ lib/
 ├── l10n/
 │   └── app_strings.dart                   # 四语言文案表（简中 / 英 / 日 / 繁中）
 ├── screens/
-│   ├── home_shell.dart                    # 三栏外壳：树 / 列表 / 标签编辑器 + 自动保存 + 回收站
+│   ├── home_shell.dart                    # 三栏外壳：树 / 列表 / 标签编辑器 + 自动保存 + 归档 + 兜底建库
 │   └── settings_screen.dart               # 设置页：语言、主色、外观（MD3）
 ├── widgets/
 │   ├── notebook_tree.dart                 # OneNote 风格左树（右键/更多菜单增删改）
 │   ├── note_tile.dart                     # 单条笔记展示（置顶、分区、动作菜单）
 │   ├── tab_strip.dart                     # 多标签条（脏标记、中键区域右键菜单、溢出滚动）
-│   ├── note_editor.dart                   # 编辑器面板（工具栏/三视图/分区归属/标签/统计）
+│   ├── note_editor.dart                   # 编辑器面板（工具栏/三视图/归属选择/标签/统计）
 │   ├── folder_manager.dart                # 文件夹管理弹窗（新建 / 重命名 / 删除）
 │   └── markdown_view.dart                 # Markdown 渲染视图（GFM）
 └── utils/
@@ -169,23 +170,28 @@ Note.create(content: '# 标题\n\n- 第一项').plainPreview;   // => '标题 �
 ```dart
 class Note {
   final List<String> tags;    // 标签
-  final String? sectionId;    // 所属分区；null = 未分组
+  final String? notebookId;   // 所属笔记本；不变式要求必有，旧数据在加载时按分区补全
+  final String? sectionId;    // 所属分区，可空——空即挂在该笔记本的「未分区」下
   final bool pinned;          // 置顶
-  final bool trashed;         // 在回收站里（软删除）
+  final bool archived;        // 已归档（软删除）
 }
 ```
 
-- 编辑器底部元信息行：分区用 `PopupMenuButton` 选（列出「未分组」和全部 `笔记本 / 分区`），标签用 `Chip` 增删
+- 编辑器顶部的面包屑按钮用 `showMenu` 选归属：列出每个笔记本的「未分区」和它下面的分区，
+  选分区时笔记本跟着改（笔记不能跨笔记本挂分区），菜单项编码成 `nb:<笔记本>` / `s:<分区>`
 - 左侧 `NotebookTree` 决定「看哪个范围」，顶部搜索框决定「匹配什么」，两者互不耦合
 - 范围 + 筛选 + 排序全部抽进 `models/note_filter.dart`，纯 Dart，可单独跑断言：
 
 ```dart
 const scope = NoteScope.notebook('nb-1');
 final visible = const NoteFilter(tag: '工作', keyword: '周报')
-    .apply(notes, scope, notebookSectionIds: {'s-1', 's-2'});
+    .apply(notes, scope, groupSectionIds: {'s-1', 's-2'});
 ```
 
-- 删除分区 / 分区组 / 笔记本只解除归属，笔记本身不丢（落回「未分组」）；删除走回收站，可还原
+- 删除分区 / 笔记本不丢笔记：删笔记本走 `moveNotesToNotebook()`（并入另一个笔记本并清空分区），
+  删分区走 `clearNoteSections()`（落到该笔记本的「未分区」）；`_ensureDefaults()` 在每次加载时
+  兜住脏数据，所以每条笔记始终属于一个笔记本
+- 归档（软删除）在左树「已归档」里可取消归档或彻底删除
 
 ## 键盘快捷键
 
@@ -381,15 +387,15 @@ class AppStrings {
 
 ```
 test/models/note_test.dart                      # 模型序列化、标签/文件夹、Markdown 摘要
-test/models/note_filter_test.dart               # 范围（笔记本/分区/未分组/置顶/回收站）+ 排序 + 关键词/标签
+test/models/note_filter_test.dart               # 范围（笔记本/未分区/分区组/分区/置顶/已归档）+ 排序 + 关键词/标签
 test/models/app_settings_test.dart              # 设置序列化、四语言文案齐全性
-test/data/in_memory_note_repository_test.dart   # 笔记 CRUD、置顶、软删除、解除分区
+test/data/in_memory_note_repository_test.dart   # 笔记 CRUD、置顶、软删除、换笔记本、解除分区
 test/data/in_memory_notebook_repository_test.dart   # 笔记本 / 分区组 / 分区 层级动作
 test/data/shared_prefs_notebook_repository_test.dart # 旧文件夹 → 分区的一次性迁移与往返读写
 test/l10n/app_strings_test.dart                 # 四种语言 key 完整性与回退
 test/utils/markdown_test.dart                   # Markdown → 纯文本 + GFM 解析（含表格）
-test/utils/markdown_tools_test.dart             # 工具栏包裹/前缀/插块 + 双链预处理
-test/widgets/note_flow_test.dart                # 三栏全流程、多标签开关、自动保存、回收站还原、
+test/utils/markdown_tools_test.dart             # 工具栏包裹/前缀/插块 + 双链预处理 + 单换行补硬换行
+test/widgets/note_flow_test.dart                # 三栏全流程、多标签开关、自动保存、归档与取消归档、
                                                 # 双链预览、窄屏返回、快捷键、切换语言生效
 ```
 
@@ -397,12 +403,33 @@ test/widgets/note_flow_test.dart                # 三栏全流程、多标签开
 
 ```bash
 flutter test                      # Widget + 单元测试
-dart run tool/selfcheck.dart      # 纯逻辑层断言（80 项），退出码即结果
+dart run tool/selfcheck.dart      # 纯逻辑层断言（90 项），退出码即结果
 ```
 
 `tool/selfcheck.dart` 不依赖 Flutter 运行时：模型、筛选、文本工具、内存仓储都是纯 Dart，
 所以遇到 `flutter test` 跑不起来的环境（例如回环 TCP 被本机防火墙/安全软件拦掉，测试套件
 会在 "Connection closed before test suite loaded" 处失败）时，仍然可以用 Dart VM 直接验证逻辑层。
+
+### Web 调试
+
+```bash
+flutter build web --release --no-web-resources-cdn
+python -m http.server 8080 --bind 0.0.0.0     # 再用本机局域网 IP 打开 http://<IP>:8080/
+```
+
+两个坑都来自上面那类被限制的网络环境：
+
+- **必须带 `--no-web-resources-cdn`。** 默认产物在运行时从 `https://www.gstatic.com/flutter-canvaskit`
+  下载 CanvasKit，这个域名连不上时页面只剩一片白，控制台里也只有加载失败，看不出是应用的问题。
+  加上该 flag 后 `flutter_bootstrap.js` 里会写 `"useLocalCanvasKit":true`，渲染器改从同源的
+  `build/web/canvaskit/` 取。
+- **别用 `localhost` / `127.0.0.1` 起服务。** 回环 TCP 被拦时，浏览器访问 `127.0.0.1` 一样会
+  连接超时（不是拒绝，是超时，容易误判成服务没起来）。绑 `0.0.0.0` 并用 `ipconfig` 里的本机
+  IPv4 访问就绕开了；`flutter run -d chrome` 在这种机器上也跑不通，因为 flutter 工具要连
+  Chrome 的调试端口，同样走回环。
+
+web 端的数据存在该源的 `localStorage` 里（`shared_preferences` 的 web 实现），和桌面端各自的
+本地存储互不相通，首次打开是空的属正常。
 
 ### 运行时自检 `tool/runtime_harness.dart`
 
@@ -433,6 +460,8 @@ $SDK/bin/cache/artifacts/engine/windows-x64/flutter_tester.exe \
   `RenderView.configuration` 把根视图撑到 1440×900。指针事件与 KeyEvent 仍走框架真实管线
   （键盘从 `PlatformDispatcher.onKeyData` 注入 `ui.KeyData`，`synthesized: true` 才会立刻
   flush 成 KeyMessage），因此这一轮能同时验证 `Ctrl+N` / `Ctrl+Tab` / `Ctrl+W`。
+- `ARGONOTE_FRESH=1`（配合 `ARGONOTE_WIDE=1`）换成空库跑一轮：验证首次运行会自动建出
+  「我的笔记本」和它下面的「未分区」行、新建草稿继承该笔记本、空白草稿关掉后不落库。
 - 注意别用 `TestWidgetsFlutterBinding`：`LiveTestWidgetsFlutterBinding` 会接管指针事件分发，
   合成点击全部失效。
 - 跑完记得 `flutter build bundle`（默认入口 `lib/main.dart`）覆盖回去，否则

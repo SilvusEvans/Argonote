@@ -14,15 +14,17 @@ void main() {
       expect(notes.last.id, a.id);
     });
 
-    test('create 记录分区与置顶', () async {
+    test('create 记录笔记本、分区与置顶', () async {
       final repo = InMemoryNoteRepository();
       final note = await repo.create(
         title: 't',
         content: 'c',
+        notebookId: 'nb-1',
         sectionId: 'sec-1',
         pinned: true,
       );
 
+      expect(note.notebookId, 'nb-1');
       expect(note.sectionId, 'sec-1');
       expect(note.pinned, isTrue);
     });
@@ -62,13 +64,13 @@ void main() {
       final repo = InMemoryNoteRepository();
       final note = await repo.create(title: 't', content: 'c');
 
-      final trashed = await repo.moveToTrash(note.id);
-      expect(trashed.trashed, isTrue);
-      expect(trashed.deletedAt, isNotNull);
-      expect((await repo.findById(note.id))!.trashed, isTrue);
+      final archived = await repo.archiveNote(note.id);
+      expect(archived.archived, isTrue);
+      expect(archived.deletedAt, isNotNull);
+      expect((await repo.findById(note.id))!.archived, isTrue);
 
-      final restored = await repo.restoreFromTrash(note.id);
-      expect(restored.trashed, isFalse);
+      final restored = await repo.unarchiveNote(note.id);
+      expect(restored.archived, isFalse);
       expect(restored.deletedAt, isNull);
 
       await repo.delete(note.id);
@@ -84,15 +86,33 @@ void main() {
       expect(pinned.updatedAt, note.updatedAt);
     });
 
-    test('unassignSections 只解除指定分区的归属', () async {
+    test('moveNotesToNotebook 换笔记本并清空分区', () async {
       final repo = InMemoryNoteRepository();
-      final inA = await repo.create(title: 'a', content: '', sectionId: 'sec-a');
-      final inB = await repo.create(title: 'b', content: '', sectionId: 'sec-b');
+      final moved = await repo.create(title: 'a', content: '', notebookId: 'nb-1', sectionId: 'sec-a');
+      final kept = await repo.create(title: 'b', content: '', notebookId: 'nb-2', sectionId: 'sec-b');
+      final before = moved.updatedAt;
 
-      await repo.unassignSections({'sec-a'});
+      await repo.moveNotesToNotebook([moved.id], 'nb-3');
 
-      expect((await repo.findById(inA.id))!.sectionId, isNull);
-      expect((await repo.findById(inB.id))!.sectionId, 'sec-b');
+      final after = (await repo.findById(moved.id))!;
+      expect(after.notebookId, 'nb-3');
+      expect(after.sectionId, isNull);
+      // 挪动归属不算编辑，updatedAt 不能被刷新。
+      expect(after.updatedAt, before);
+      expect((await repo.findById(kept.id))!.notebookId, 'nb-2');
+    });
+
+    test('clearNoteSections 只清分区，笔记本保持不变', () async {
+      final repo = InMemoryNoteRepository();
+      final note = await repo.create(title: 'a', content: '', notebookId: 'nb-1', sectionId: 'sec-a');
+      final before = note.updatedAt;
+
+      await repo.clearNoteSections([note.id]);
+
+      final after = (await repo.findById(note.id))!;
+      expect(after.sectionId, isNull);
+      expect(after.notebookId, 'nb-1');
+      expect(after.updatedAt, before);
     });
 
     test('restore 用于撤销删除，保留原 id 与创建时间', () async {
@@ -124,7 +144,7 @@ void main() {
       });
       expect(note.sectionId, 'legacy-folder');
       expect(note.pinned, isFalse);
-      expect(note.trashed, isFalse);
+      expect(note.archived, isFalse);
     });
   });
 }

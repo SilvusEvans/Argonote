@@ -23,7 +23,7 @@ Une application de notes minimaliste construite avec Flutter : **créer, éditer
 | Recherche | Champ en haut, insensible à la casse sur titre / corps / étiquettes, filtrage en direct |
 | Tri | Par date de dernière modification, la plus récente en premier |
 | Sauvegarde auto | Quitter l'écran d'édition (bouton retour / geste) enregistre tout |
-| Langue | Bascule entre 简体中文 / English / 日本語 / 繁體中文 dans les paramètres ; effet immédiat et mémorisé |
+| Langue | English par défaut ; bascule entre 简体中文 / English / 日本語 / 繁體中文 dans les paramètres ; effet immédiat et mémorisé |
 | Couleur du thème | 6 couleurs principales + apparence système / clair / sombre |
 | Notes vides | Une note sans titre, corps, étiquette ni dossier n'est pas enregistrée ; vider une note existante la supprime |
 

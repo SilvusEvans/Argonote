@@ -100,13 +100,16 @@ class AppStrings {
   String get sortTitle => text('sortTitle');
 
   String deleteMessage(String title) => text('deleteMessage').replaceAll('{title}', title);
-  String deletedMessage(String title) => text('deletedMessage').replaceAll('{title}', title);
+  String archivedMessage(String title) => text('archivedMessage').replaceAll('{title}', title);
 
   // ---- 笔记树（OneNote 体系） ----
   String get allNotes => text('allNotes');
   String get pinnedScope => text('pinnedScope');
-  String get trash => text('trash');
-  String get unfiled => text('unfiled');
+  String get archived => text('archived');
+  String get archive => text('archive');
+  String get unarchive => text('unarchive');
+  String get defaultNotebook => text('defaultNotebook');
+  String get unsectioned => text('unsectioned');
   String get notebookLabel => text('notebookLabel');
   String get sectionLabel => text('sectionLabel');
   String get groupLabel => text('groupLabel');
@@ -123,14 +126,14 @@ class AppStrings {
   String get deleteGroupTitle => text('deleteGroupTitle');
   String get deleteGroupMessage => text('deleteGroupMessage');
 
-  // ---- 回收站 / 置顶 ----
+  // ---- 归档 / 置顶 ----
   String get pin => text('pin');
   String get unpin => text('unpin');
   String get restore => text('restore');
   String get deleteForever => text('deleteForever');
-  String get emptyTrash => text('emptyTrash');
-  String get emptyTrashConfirm => text('emptyTrashConfirm');
-  String get trashEmpty => text('trashEmpty');
+  String get emptyArchive => text('emptyArchive');
+  String get emptyArchiveConfirm => text('emptyArchiveConfirm');
+  String get archiveEmpty => text('archiveEmpty');
 
   // ---- 标签页 ----
   String get tabCloseOthers => text('tabCloseOthers');
@@ -205,7 +208,7 @@ class AppStrings {
     'noMatchSubtitle': '换个关键词试试',
     'deleteTitle': '删除笔记',
     'deleteMessage': '确定删除「{title}」吗？',
-    'deletedMessage': '已删除「{title}」',
+    'archivedMessage': '已归档「{title}」',
     'tagSection': '标签',
     'tagNone': '无标签',
     'sortBy': '排序',
@@ -214,8 +217,9 @@ class AppStrings {
     'sortTitle': '标题',
     'allNotes': '所有笔记',
     'pinnedScope': '置顶',
-    'trash': '回收站',
-    'unfiled': '未分组',
+    'archived': '已归档',
+    'defaultNotebook': '我的笔记本',
+    'unsectioned': '未分区',
     'notebookLabel': '笔记本',
     'sectionLabel': '分区',
     'groupLabel': '分区组',
@@ -226,18 +230,20 @@ class AppStrings {
     'newSectionGroup': '新建分区组',
     'groupNameHint': '分区组名称',
     'deleteNotebookTitle': '删除笔记本',
-    'deleteNotebookMessage': '删除后，其中的分区和分区组会一并删除，笔记移入「未分组」。笔记本身不会丢失。',
+    'deleteNotebookMessage': '删除后，其中的分区和分区组会一并删除，笔记移入其他笔记本的「未分区」。笔记本身不会丢失。',
     'deleteSectionTitle': '删除分区',
-    'deleteSectionMessage': '删除后，该分区下的笔记会变为「未分组」，笔记本身不会丢失。',
+    'deleteSectionMessage': '删除后，该分区下的笔记会留在笔记本的「未分区」里，笔记本身不会丢失。',
     'deleteGroupTitle': '删除分区组',
     'deleteGroupMessage': '组内的分区会提升到笔记本下，不会被删除。',
     'pin': '置顶',
     'unpin': '取消置顶',
     'restore': '还原',
+    'archive': '归档',
+    'unarchive': '取消归档',
     'deleteForever': '彻底删除',
-    'emptyTrash': '清空回收站',
-    'emptyTrashConfirm': '回收站里的笔记将被永久删除，无法恢复。确定继续吗？',
-    'trashEmpty': '回收站是空的',
+    'emptyArchive': '清空归档',
+    'emptyArchiveConfirm': '归档里的笔记将被永久删除，无法恢复。确定继续吗？',
+    'archiveEmpty': '归档是空的',
     'tabCloseOthers': '关闭其它标签',
     'tabCloseAll': '关闭全部标签',
     'saved': '已保存',
@@ -303,7 +309,7 @@ class AppStrings {
     'noMatchSubtitle': 'Try a different keyword',
     'deleteTitle': 'Delete note',
     'deleteMessage': 'Delete “{title}”?',
-    'deletedMessage': 'Deleted “{title}”',
+    'archivedMessage': 'Archived “{title}”',
     'tagSection': 'Tags',
     'tagNone': 'Untagged',
     'sortBy': 'Sort',
@@ -312,8 +318,9 @@ class AppStrings {
     'sortTitle': 'Title',
     'allNotes': 'All notes',
     'pinnedScope': 'Pinned',
-    'trash': 'Trash',
-    'unfiled': 'Unfiled',
+    'archived': 'Archived',
+    'defaultNotebook': 'My Notebook',
+    'unsectioned': 'Unsectioned',
     'notebookLabel': 'Notebook',
     'sectionLabel': 'Section',
     'groupLabel': 'Section group',
@@ -324,18 +331,20 @@ class AppStrings {
     'newSectionGroup': 'New section group',
     'groupNameHint': 'Section group name',
     'deleteNotebookTitle': 'Delete notebook',
-    'deleteNotebookMessage': 'Its sections and groups will be removed; notes become “Unfiled”. Notes are kept.',
+    'deleteNotebookMessage': 'Its sections and groups will be removed; notes move to “Unsectioned” in another notebook. Notes are kept.',
     'deleteSectionTitle': 'Delete section',
-    'deleteSectionMessage': 'Notes inside will become “Unfiled”. Notes themselves are kept.',
+    'deleteSectionMessage': 'Notes inside stay in the notebook under “Unsectioned”. Notes themselves are kept.',
     'deleteGroupTitle': 'Delete section group',
     'deleteGroupMessage': 'Sections inside move up to the notebook. They are not deleted.',
     'pin': 'Pin',
     'unpin': 'Unpin',
     'restore': 'Restore',
+    'archive': 'Archive',
+    'unarchive': 'Unarchive',
     'deleteForever': 'Delete forever',
-    'emptyTrash': 'Empty trash',
-    'emptyTrashConfirm': 'Notes in the trash will be permanently removed. Continue?',
-    'trashEmpty': 'Trash is empty',
+    'emptyArchive': 'Empty archive',
+    'emptyArchiveConfirm': 'Archived notes will be permanently removed. Continue?',
+    'archiveEmpty': 'Archive is empty',
     'tabCloseOthers': 'Close other tabs',
     'tabCloseAll': 'Close all tabs',
     'saved': 'Saved',
@@ -401,7 +410,7 @@ class AppStrings {
     'noMatchSubtitle': '別のキーワードで試してください',
     'deleteTitle': 'メモを削除',
     'deleteMessage': '「{title}」を削除しますか？',
-    'deletedMessage': '「{title}」を削除しました',
+    'archivedMessage': '「{title}」をアーカイブしました',
     'tagSection': 'タグ',
     'tagNone': 'タグなし',
     'sortBy': '並び替え',
@@ -410,8 +419,9 @@ class AppStrings {
     'sortTitle': 'タイトル',
     'allNotes': 'すべてのメモ',
     'pinnedScope': 'ピン留め',
-    'trash': 'ごみ箱',
-    'unfiled': '未分類',
+    'archived': 'アーカイブ',
+    'defaultNotebook': 'マイノートブック',
+    'unsectioned': '未セクション',
     'notebookLabel': 'ノートブック',
     'sectionLabel': 'セクション',
     'groupLabel': 'セクショングループ',
@@ -422,18 +432,20 @@ class AppStrings {
     'newSectionGroup': '新しいセクショングループ',
     'groupNameHint': 'セクショングループ名',
     'deleteNotebookTitle': 'ノートブックを削除',
-    'deleteNotebookMessage': '内のセクションとグループも削除され、メモは「未分類」になります。メモ自体は残ります。',
+    'deleteNotebookMessage': '内のセクションとグループも削除され、メモは他のノートブックの「未セクション」に移動します。メモ自体は残ります。',
     'deleteSectionTitle': 'セクションを削除',
-    'deleteSectionMessage': 'セクション内のメモは「未分類」になります。メモ自体は削除されません。',
+    'deleteSectionMessage': 'セクション内のメモはノートブックの「未セクション」に残ります。メモ自体は削除されません。',
     'deleteGroupTitle': 'セクショングループを削除',
     'deleteGroupMessage': 'グループ内のセクションはノートブック直下に移動します。削除されません。',
     'pin': 'ピン留め',
     'unpin': 'ピン留めを解除',
     'restore': '復元',
+    'archive': 'アーカイブ',
+    'unarchive': 'アーカイブ解除',
     'deleteForever': '完全に削除',
-    'emptyTrash': 'ごみ箱を空にする',
-    'emptyTrashConfirm': 'ごみ箱のメモは復元できません。続行しますか？',
-    'trashEmpty': 'ごみ箱は空です',
+    'emptyArchive': 'アーカイブを空にする',
+    'emptyArchiveConfirm': 'アーカイブしたメモは復元できません。続行しますか？',
+    'archiveEmpty': 'アーカイブは空です',
     'tabCloseOthers': '他のタブを閉じる',
     'tabCloseAll': 'すべてのタブを閉じる',
     'saved': '保存しました',
@@ -499,7 +511,7 @@ class AppStrings {
     'noMatchSubtitle': '換個關鍵字試試',
     'deleteTitle': '刪除筆記',
     'deleteMessage': '確定刪除「{title}」嗎？',
-    'deletedMessage': '已刪除「{title}」',
+    'archivedMessage': '已封存「{title}」',
     'tagSection': '標籤',
     'tagNone': '無標籤',
     'sortBy': '排序',
@@ -508,8 +520,9 @@ class AppStrings {
     'sortTitle': '標題',
     'allNotes': '所有筆記',
     'pinnedScope': '置頂',
-    'trash': '資源回收筒',
-    'unfiled': '未分類',
+    'archived': '已封存',
+    'defaultNotebook': '我的筆記本',
+    'unsectioned': '未分區',
     'notebookLabel': '筆記本',
     'sectionLabel': '區段',
     'groupLabel': '區段群組',
@@ -520,18 +533,20 @@ class AppStrings {
     'newSectionGroup': '新增區段群組',
     'groupNameHint': '區段群組名稱',
     'deleteNotebookTitle': '刪除筆記本',
-    'deleteNotebookMessage': '刪除後，其中的區段與區段群組一併刪除，筆記移入「未分類」。筆記本身不會遺失。',
+    'deleteNotebookMessage': '刪除後，其中的區段與區段群組一併刪除，筆記移入其他筆記本的「未分區」。筆記本身不會遺失。',
     'deleteSectionTitle': '刪除區段',
-    'deleteSectionMessage': '刪除後，區段內的筆記會變成「未分類」，筆記本身不會遺失。',
+    'deleteSectionMessage': '刪除後，區段內的筆記會留在筆記本的「未分區」裡，筆記本身不會遺失。',
     'deleteGroupTitle': '刪除區段群組',
     'deleteGroupMessage': '群組內的區段會提升到筆記本下，不會被刪除。',
     'pin': '置頂',
     'unpin': '取消置頂',
     'restore': '還原',
+    'archive': '封存',
+    'unarchive': '取消封存',
     'deleteForever': '彻底刪除',
-    'emptyTrash': '清空資源回收筒',
-    'emptyTrashConfirm': '資源回收筒內的筆記將永久刪除且無法復原。確定繼續嗎？',
-    'trashEmpty': '資源回收筒是空的',
+    'emptyArchive': '清空封存',
+    'emptyArchiveConfirm': '封存內的筆記將永久刪除且無法復原。確定繼續嗎？',
+    'archiveEmpty': '封存是空的',
     'tabCloseOthers': '關閉其他索引標籤',
     'tabCloseAll': '關閉所有索引標籤',
     'saved': '已儲存',

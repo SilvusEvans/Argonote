@@ -146,6 +146,38 @@ String preprocessWikiLinks(String source) {
   return buffer.toString();
 }
 
+/// 标准 Markdown 把单个换行当软换行，渲染时会并成一段，逼着用户敲两次回车。
+/// 这里在代码围栏之外，给相邻的两行普通文字补上两个尾随空格，变成硬换行。
+///
+/// 表格行、列表项、标题、分割线、缩进代码块都有各自的块级语义，不参与；
+/// 引用块的相邻两行之间照样断行。
+String applySoftLineBreaks(String source) {
+  final lines = source.split('\n');
+  var inFence = false;
+  for (var i = 0; i < lines.length - 1; i++) {
+    if (RegExp(r'^\s*(```|~~~)').hasMatch(lines[i])) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    if (!_isPlainTextLine(lines[i]) || !_isPlainTextLine(lines[i + 1])) continue;
+    if (lines[i].endsWith('  ')) continue;
+    lines[i] = '${lines[i]}  ';
+  }
+  return lines.join('\n');
+}
+
+/// 参与硬换行判定的「普通文字行」：非空、不是块级语法、也不是缩进代码。
+bool _isPlainTextLine(String line) {
+  final trimmed = line.trimLeft();
+  if (trimmed.isEmpty) return false;
+  if (line.startsWith('    ') || line.startsWith('\t')) return false;
+  final body = trimmed.startsWith('>') ? trimmed.replaceFirst(RegExp(r'^>\s*'), '') : trimmed;
+  if (body.isEmpty) return false;
+  if (body.startsWith('|')) return false;
+  return !RegExp(r'^(#{1,6}\s|[-*+]\s|\d+[.)]\s|---+$|\*\*\*+$|___+$)').hasMatch(body);
+}
+
 /// 从 onTapLink 收到的 href 里解析双链目标；非 note:// 返回 null。
 String? wikiLinkTarget(String href) {
   if (!href.startsWith('note://')) return null;

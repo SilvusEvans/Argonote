@@ -5,6 +5,7 @@ import '../l10n/app_strings.dart';
 import '../models/note_tab.dart';
 import '../models/notebook.dart';
 import '../utils/markdown_tools.dart';
+import '../utils/popup_anchor.dart';
 import '../utils/markdown_plain.dart' show plainTextFromMarkdown;
 import 'markdown_view.dart';
 
@@ -97,16 +98,20 @@ class _NoteEditorState extends State<NoteEditor> {
       ..showSnackBar(SnackBar(content: Text(strings.copiedToClipboard), duration: const Duration(seconds: 1)));
   }
 
-  String get _sectionLabel {
-    if (tab.sectionId == null) return strings.unfiled;
-    for (final section in widget.sections) {
-      if (section.id == tab.sectionId) {
-        final notebook = widget.notebooks.where((n) => n.id == section.notebookId);
-        final prefix = notebook.isEmpty ? '' : '${notebook.first.name} / ';
-        return '$prefix${section.name}';
+  String get _placementLabel {
+    var prefix = '';
+    for (final notebook in widget.notebooks) {
+      if (notebook.id != tab.notebookId) continue;
+      prefix = '${notebook.name} / ';
+      break;
+    }
+    final sectionId = tab.sectionId;
+    if (sectionId != null) {
+      for (final section in widget.sections) {
+        if (section.id == sectionId) return '$prefix${section.name}';
       }
     }
-    return strings.unfiled;
+    return '$prefix${strings.unsectioned}';
   }
 
   @override
@@ -116,6 +121,9 @@ class _NoteEditorState extends State<NoteEditor> {
     final lines = text.isEmpty ? 0 : text.split('\n').length;
 
     return Column(
+      // 不写这行时 Column 默认 center：工具栏和预览这种「按内容取宽」的子项
+      // 会被压成固有宽度并水平居中，表现为预览文字莫名靠中间。
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (_view != 2) _buildToolbar(),
         Padding(
@@ -154,34 +162,39 @@ class _NoteEditorState extends State<NoteEditor> {
           child: Row(
             children: [
               Expanded(
-                child: InkWell(
-                  onTap: _showSectionPicker,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.book_outlined, size: 16, color: theme.colorScheme.primary),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            _sectionLabel,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.primary,
-                              fontWeight: FontWeight.w600,
+                child: Builder(
+                  builder: (anchorContext) => InkWell(
+                    onTap: () => _showSectionPicker(anchorContext),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.book_outlined, size: 16, color: theme.colorScheme.primary),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              _placementLabel,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
-                        ),
-                        Icon(Icons.arrow_drop_down, size: 18, color: theme.colorScheme.primary),
-                      ],
+                          Icon(Icons.arrow_drop_down, size: 18, color: theme.colorScheme.primary),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
               const SizedBox(width: 8),
               SegmentedButton<int>(
-                style: SegmentedButton.styleFrom(visualDensity: VisualDensity.compact),
+                style: SegmentedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  shape: const StadiumBorder(),
+                ),
                 showSelectedIcon: false,
                 segments: <ButtonSegment<int>>[
                   ButtonSegment<int>(value: 0, icon: const Icon(Icons.edit_outlined, size: 16)),
@@ -284,7 +297,7 @@ class _NoteEditorState extends State<NoteEditor> {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       child: MarkdownView(
-        data: preprocessWikiLinks(source),
+        data: applySoftLineBreaks(preprocessWikiLinks(source)),
         onTapLink: (href) {
           final wikiTitle = wikiLinkTarget(href);
           if (wikiTitle != null) {
@@ -390,49 +403,62 @@ class _NoteEditorState extends State<NoteEditor> {
     _notify();
   }
 
-  void _showSectionPicker() {
-    final notebooksById = {for (final n in widget.notebooks) n.id: n};
-    final entries = <PopupMenuEntry<String>>[
-      PopupMenuItem<String>(
-        value: '__none__',
-        child: ListTile(
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.inbox_outlined),
-          title: Text(strings.unfiled),
-        ),
-      ),
-    ];
-    String? lastNotebookId;
-    for (final section in widget.sections) {
-      final notebook = notebooksById[section.notebookId];
-      if (notebook == null) continue;
-      if (section.notebookId != lastNotebookId) lastNotebookId = section.notebookId;
+  /// 归属选择器：笔记本必选，分区可选。
+  ///
+  /// 菜单项 id 编码为 `nb:<笔记本>` / `s:<分区>`：选笔记本等价于挪到它的
+  /// 「未分区」下，选分区则顺带把笔记本一起改掉（笔记不能跨笔记本挂分区）。
+  void _showSectionPicker(BuildContext anchor) {
+    const notebookPrefix = 'nb:';
+    const sectionPrefix = 's:';
+    final entries = <PopupMenuEntry<String>>[];
+    for (final notebook in widget.notebooks) {
+      final unsectioned = notebook.id == tab.notebookId && tab.sectionId == null;
       entries.add(
         PopupMenuItem<String>(
-          value: section.id,
+          value: '$notebookPrefix${notebook.id}',
           child: ListTile(
             dense: true,
             contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.description_outlined),
-            title: Text('${notebook.name} / ${section.name}'),
+            leading: Icon(unsectioned ? Icons.check : Icons.inbox_outlined),
+            title: Text('${notebook.name} / ${strings.unsectioned}'),
           ),
         ),
       );
+      for (final section in widget.sections.where((s) => s.notebookId == notebook.id)) {
+        entries.add(
+          PopupMenuItem<String>(
+            value: '$sectionPrefix${section.id}',
+            child: ListTile(
+              dense: true,
+              contentPadding: const EdgeInsets.only(left: 24),
+              leading: Icon(section.id == tab.sectionId ? Icons.check : Icons.description_outlined),
+              title: Text(section.name),
+            ),
+          ),
+        );
+      }
     }
 
-    final renderBox = context.findRenderObject() as RenderBox?;
-    final origin = renderBox?.localToGlobal(
-          Offset(renderBox.size.width / 2, renderBox.size.height / 2),
-        ) ??
-        Offset.zero;
     showMenu<String>(
-      context: context,
-      position: RelativeRect.fromLTRB(origin.dx, origin.dy, origin.dx, origin.dy),
+      context: anchor,
+      position: menuRectBelow(anchor),
       items: entries,
     ).then((value) {
       if (value == null) return;
-      tab.sectionId = value == '__none__' ? null : value;
+      if (value.startsWith(notebookPrefix)) {
+        tab.notebookId = value.substring(notebookPrefix.length);
+        tab.sectionId = null;
+      } else if (value.startsWith(sectionPrefix)) {
+        final sectionId = value.substring(sectionPrefix.length);
+        for (final section in widget.sections) {
+          if (section.id != sectionId) continue;
+          tab.sectionId = sectionId;
+          tab.notebookId = section.notebookId;
+          break;
+        }
+      } else {
+        return;
+      }
       _notify();
     });
   }

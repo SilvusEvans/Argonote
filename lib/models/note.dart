@@ -14,9 +14,10 @@ class Note {
     required this.createdAt,
     required this.updatedAt,
     this.tags = const <String>[],
+    this.notebookId,
     this.sectionId,
     this.pinned = false,
-    this.trashed = false,
+    this.archived = false,
     this.deletedAt,
   });
 
@@ -37,16 +38,21 @@ class Note {
   /// 标签。同一条笔记可以有多个，列表页可按标签筛选。
   final List<String> tags;
 
-  /// 所属分区 id；null 表示「未分组」。
+  /// 所属笔记本 id。不变式：每条笔记都必须归属一个笔记本，加载时
+  /// `HomeShell._ensureDefaults()` 会把没有有效归属的笔记并进兜底笔记本；
+  /// 类型可空只是为了容忍旧数据里这个字段还不存在。
+  final String? notebookId;
+
+  /// 所属分区 id，可以为空——空表示挂在该笔记本的「未分区」下。
   final String? sectionId;
 
   /// 置顶（收藏）。置顶的笔记排在列表最前面。
   final bool pinned;
 
-  /// 是否在回收站里。软删除标记，列表默认过滤掉。
-  final bool trashed;
+  /// 是否已归档。软删除标记，列表默认过滤掉。
+  final bool archived;
 
-  /// 进入回收站的时间，用于「彻底删除」的提醒文案。
+  /// 归档时间，用于「彻底删除」的提醒文案。
   final DateTime? deletedAt;
 
   /// 标题是否为空（展示层用 [AppStrings.untitled] 兜底，避免模型里写死文案）。
@@ -55,13 +61,9 @@ class Note {
   /// 展示用的标题，可能为空字符串。
   String get displayTitle => title.trim();
 
-  /// 是否为空笔记（标题、正文、标签都为空且不归属任何分区）。
-  /// 保存时用它判断要不要丢弃/删除。
+  /// 是否为空笔记（标题、正文、标签都为空）。保存时用它判断要不要丢弃/删除。
   bool get isBlank =>
-      title.trim().isEmpty &&
-      content.trim().isEmpty &&
-      tags.isEmpty &&
-      sectionId == null;
+      title.trim().isEmpty && content.trim().isEmpty && tags.isEmpty;
 
   /// 列表副标题用的纯文本摘要：把 Markdown 标记尽量剥掉后再按字素截断。
   String get plainPreview => plainTextFromMarkdown(content);
@@ -100,9 +102,10 @@ class Note {
     String? content,
     DateTime? updatedAt,
     List<String>? tags,
+    Object? notebookId = _sentinel,
     Object? sectionId = _sentinel,
     bool? pinned,
-    bool? trashed,
+    bool? archived,
     Object? deletedAt = _sentinel,
   }) {
     return Note(
@@ -112,9 +115,10 @@ class Note {
       createdAt: createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
       tags: tags ?? this.tags,
+      notebookId: identical(notebookId, _sentinel) ? this.notebookId : notebookId as String?,
       sectionId: identical(sectionId, _sentinel) ? this.sectionId : sectionId as String?,
       pinned: pinned ?? this.pinned,
-      trashed: trashed ?? this.trashed,
+      archived: archived ?? this.archived,
       deletedAt: identical(deletedAt, _sentinel) ? this.deletedAt : deletedAt as DateTime?,
     );
   }
@@ -128,6 +132,7 @@ class Note {
     String title = '',
     String content = '',
     List<String> tags = const <String>[],
+    String? notebookId,
     String? sectionId,
   }) {
     final now = DateTime.now();
@@ -138,6 +143,7 @@ class Note {
       createdAt: now,
       updatedAt: now,
       tags: tags,
+      notebookId: notebookId,
       sectionId: sectionId,
     );
   }
@@ -153,9 +159,10 @@ class Note {
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),
         'tags': tags,
+        'notebookId': notebookId,
         'sectionId': sectionId,
         'pinned': pinned,
-        'trashed': trashed,
+        'archived': archived,
         'deletedAt': deletedAt?.toIso8601String(),
       };
 
@@ -185,9 +192,12 @@ class Note {
       createdAt: createdAt ?? updatedAt ?? DateTime.now(),
       updatedAt: updatedAt ?? createdAt ?? DateTime.now(),
       tags: tags,
+      // notebookId 是后加的字段：旧数据一律留空，由加载时的兜底逻辑按分区补全。
+      notebookId: json['notebookId'] as String?,
       sectionId: (json['sectionId'] as String?) ?? (json['folderId'] as String?),
       pinned: json['pinned'] as bool? ?? false,
-      trashed: json['trashed'] as bool? ?? false,
+      // 归档位早期叫 trashed（"回收站"语义），旧数据里仍是那个 key。
+      archived: json['archived'] as bool? ?? json['trashed'] as bool? ?? false,
       deletedAt: DateTime.tryParse(json['deletedAt'] as String? ?? ''),
     );
   }
@@ -202,11 +212,11 @@ class Note {
           other.createdAt == createdAt &&
           other.updatedAt == updatedAt &&
           other.pinned == pinned &&
-          other.trashed == trashed;
+          other.archived == archived;
 
   @override
   int get hashCode =>
-      Object.hash(id, title, content, createdAt, updatedAt, pinned, trashed);
+      Object.hash(id, title, content, createdAt, updatedAt, pinned, archived);
 
   @override
   String toString() => 'Note(id: $id, title: $title, updatedAt: $updatedAt)';

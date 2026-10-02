@@ -22,7 +22,7 @@ class AppSettings {
   final int themeModeIndex;
 
   static AppSettings defaults() => AppSettings(
-        languageCode: AppLanguage.simplifiedChinese.code,
+        languageCode: AppLanguage.english.code,
         seedColorValue: AppSettings.seedColorPresets.first.toARGB32(),
         themeModeIndex: 0,
       );

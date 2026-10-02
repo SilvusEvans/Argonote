@@ -49,9 +49,10 @@ Note note(
   String title = '',
   String content = '',
   List<String> tags = const <String>[],
+  String? notebookId,
   String? sectionId,
   bool pinned = false,
-  bool trashed = false,
+  bool archived = false,
   int day = 1,
 }) {
   final stamp = DateTime(2026, 1, day);
@@ -62,10 +63,11 @@ Note note(
     createdAt: stamp,
     updatedAt: stamp,
     tags: tags,
+    notebookId: notebookId,
     sectionId: sectionId,
     pinned: pinned,
-    trashed: trashed,
-    deletedAt: trashed ? stamp : null,
+    archived: archived,
+    deletedAt: archived ? stamp : null,
   );
 }
 
@@ -184,34 +186,47 @@ Future<void> main() async {
   check('C11 非双链 href 返回 null', wikiLinkTarget('https://example.com') == null);
   check('C12 已转换文本不再含方括号语法', !wikified.contains('[['));
 
+  final hardBreak = applySoftLineBreaks('第一行\n第二行');
+  check('C13 单换行补成 Markdown 硬换行', hardBreak == '第一行  \n第二行');
+  check('C14 硬换行处理可重复执行', applySoftLineBreaks(hardBreak) == hardBreak);
+  check('C15 空行不补，保留段落分隔', applySoftLineBreaks('甲\n\n乙') == '甲\n\n乙');
+  check('C16 引用块内照样断行', applySoftLineBreaks('> 引一\n> 引二') == '> 引一  \n> 引二');
+  check('C17 围栏代码块内部原样保留',
+      applySoftLineBreaks('```\na\nb\n```') == '```\na\nb\n```');
+  check('C18 块级语法相邻行不补',
+      applySoftLineBreaks('正文\n- 项目') == '正文\n- 项目' &&
+          applySoftLineBreaks('# 标题\n正文') == '# 标题\n正文');
+
   // ---- D. 范围筛选与排序 ----
   final pool = <Note>[
-    note('n1', title: 'B', content: 'k', tags: const ['x'], sectionId: 's1', day: 2),
-    note('n2', title: 'A', sectionId: 's2', pinned: true, day: 1),
-    note('n3', title: 'c', day: 3),
-    note('n4', title: 'D', sectionId: 's1', trashed: true, day: 4),
+    note('n1', title: 'B', content: 'k', tags: const ['x'], notebookId: 'nb1', sectionId: 's1', day: 2),
+    note('n2', title: 'A', notebookId: 'nb1', sectionId: 's2', pinned: true, day: 1),
+    note('n3', title: 'c', notebookId: 'nb2', day: 3),
+    note('n4', title: 'D', notebookId: 'nb1', sectionId: 's1', archived: true, day: 4),
   ];
   const filter = NoteFilter.empty;
-  check('D1 全部范围排除回收站',
+  check('D1 全部范围排除归档',
       idsOf(filter.apply(pool, NoteScope.all)).toSet().difference({'n4'}).length == 3 &&
           !idsOf(filter.apply(pool, NoteScope.all)).contains('n4'));
   check('D2 置顶永远排最前', filter.apply(pool, NoteScope.all).first.id == 'n2');
   check('D3 默认按更新时间倒序',
       idsOf(filter.apply(pool, NoteScope.all)) .sublist(1) .join(',') == 'n3,n1');
-  check('D4 回收站范围', idsOf(filter.apply(pool, NoteScope.trash)).join(',') == 'n4');
+  check('D4 归档范围', idsOf(filter.apply(pool, NoteScope.archived)).join(',') == 'n4');
   check('D5 置顶范围', idsOf(filter.apply(pool, NoteScope.pinned)).join(',') == 'n2');
-  check('D6 未归类范围', idsOf(filter.apply(pool, NoteScope.unfiled)).join(',') == 'n3');
+  check('D6 置顶范围排除已归档',
+      idsOf(filter.apply(<Note>[...pool, note('n5', title: 'E', pinned: true, archived: true, day: 5)],
+              NoteScope.pinned))
+          .join(',') ==
+      'n2');
   check('D7 分区范围', idsOf(filter.apply(pool, const NoteScope.section('s1'))).join(',') == 'n1');
-  check('D8 笔记本范围（按分区集合）',
-      idsOf(filter.apply(pool, const NoteScope.notebook('nb1'),
-              notebookSectionIds: const {'s1', 's2'}))
-          .toSet()
-          .difference({'n1', 'n2'})
+  check('D8 笔记本范围按 notebookId',
+      idsOf(filter.apply(pool, const NoteScope.notebook('nb1'))).toSet().difference({'n1', 'n2'})
           .isEmpty);
   check('D9 分区组范围',
-      idsOf(filter.apply(pool, const NoteScope.group('g1'), notebookSectionIds: const {'s1'}))
+      idsOf(filter.apply(pool, const NoteScope.group('g1'), groupSectionIds: const {'s1'}))
           .join(',') == 'n1');
-  check('D10 笔记本范围必须传分区集合', filter.apply(pool, const NoteScope.notebook('nb1')).isEmpty);
+  check('D10 未分区范围只收无分区笔记',
+      idsOf(filter.apply(pool, const NoteScope.unsectioned('nb2'))).join(',') == 'n3');
   check('D11 关键词大小写不敏感',
       idsOf(const NoteFilter(keyword: 'b').apply(pool, NoteScope.all)).join(',') == 'n1');
   check('D12 关键词命中正文',
@@ -222,8 +237,9 @@ Future<void> main() async {
   check('D15 标题排序忽略大小写',
       idsOf(const NoteFilter(sort: NoteSort.titleAsc).apply(pool, NoteScope.all))
           .join(',') == 'n2,n1,n3');
-  check('D16 创建时间排序可用',
-      filter.apply(pool, NoteScope.all, notebookSectionIds: const {'s1'}).length == 3);
+  check('D16 创建时间排序可用（置顶仍在前）',
+      idsOf(const NoteFilter(sort: NoteSort.createdAtDesc).apply(pool, NoteScope.all))
+          .join(',') == 'n2,n3,n1');
   check('D17 标签收集去重排序',
       NoteFilter.collectTags(pool).join(',') == 'x');
   check('D18 copyWith 保留未传字段', const NoteFilter(tag: 't').copyWith(keyword: 'k').tag == 't');
@@ -233,38 +249,56 @@ Future<void> main() async {
 
   // ---- E. 笔记仓储行为 ----
   final repo = InMemoryNoteRepository(pool);
-  final created = await repo.create(title: '新页', content: '正文', sectionId: 's1', tags: const ['t']);
+  final created = await repo.create(
+      title: '新页', content: '正文', tags: const ['t'], notebookId: 'nb1', sectionId: 's1');
   check('E1 新建后能查到', (await repo.findById(created.id))?.title == '新页');
-  check('E2 新建携带分区', created.sectionId == 's1');
+  check('E2 新建携带归属', created.sectionId == 's1' && created.notebookId == 'nb1');
   final updated = await repo.update(
-      id: created.id, title: '改名', content: '正文2', tags: const <String>[], sectionId: 's2');
+      id: created.id,
+      title: '改名',
+      content: '正文2',
+      tags: const <String>[],
+      notebookId: 'nb1',
+      sectionId: 's2');
   check('E3 更新保留分区', updated.sectionId == 's2' && updated.title == '改名');
   check('E4 连续保存的时间戳严格递增', updated.updatedAt.isAfter(created.updatedAt));
   final unpinned = await repo.setPinned(updated.id, true);
   check('E5 置顶不刷新 updatedAt', unpinned.updatedAt == updated.updatedAt && unpinned.pinned);
   final unfiled = await repo.update(
-      id: updated.id, title: '改名', content: '正文2', tags: const <String>[], sectionId: null);
-  check('E6 显式 null 分区即移出', unfiled.sectionId == null);
-  final trashed = await repo.moveToTrash(updated.id);
-  check('E7 软删除标记与时间', trashed.trashed && trashed.deletedAt != null);
+      id: updated.id,
+      title: '改名',
+      content: '正文2',
+      tags: const <String>[],
+      notebookId: 'nb1',
+      sectionId: null);
+  check('E6 显式 null 分区即移出', unfiled.sectionId == null && unfiled.notebookId == 'nb1');
+  final archived = await repo.archiveNote(updated.id);
+  check('E7 软删除标记与时间', archived.archived && archived.deletedAt != null);
   check('E8 软删除后仍在 all() 中', (await repo.all()).any((item) => item.id == updated.id));
-  final restored = await repo.restoreFromTrash(updated.id);
-  check('E9 还原清空 deletedAt', !restored.trashed && restored.deletedAt == null);
+  final restored = await repo.unarchiveNote(updated.id);
+  check('E9 还原清空 deletedAt', !restored.archived && restored.deletedAt == null);
   await repo.delete(updated.id);
   check('E10 彻底删除后查不到', await repo.findById(updated.id) == null);
   await repo.restore(note('ghost', title: '撤销恢复', day: 5));
   check('E11 撤销恢复重新写回', (await repo.findById('ghost'))?.title == '撤销恢复');
-  await repo.unassignSections(const {'s1'});
-  final afterUnassign = await repo.all();
-  check('E12 删除分区把笔记变为未归类',
-      afterUnassign.where((item) => item.id == 'n1').single.sectionId == null);
-  check('E13 未归类只影响目标分区',
-      afterUnassign.where((item) => item.id == 'n2').single.sectionId == 's2');
-  check('E14 回收站里的笔记同样解除分区',
-      afterUnassign.where((item) => item.id == 'n4').single.sectionId == null);
-  final fresh = await repo.create(title: '', content: '', sectionId: null);
-  check('E15 空白笔记判定', fresh.isBlank);
-  check('E16 id 微秒级也不重复',
+  await repo.moveNotesToNotebook(const ['n1', 'n4'], 'nb2');
+  final afterMove = await repo.all();
+  Note pick(String id) => afterMove.where((item) => item.id == id).single;
+  check('E12 笔记本被删时笔记并入指定笔记本', pick('n1').notebookId == 'nb2');
+  check('E13 并入同时清空分区', pick('n1').sectionId == null);
+  check('E14 并入不刷新更新时间', pick('n1').updatedAt == DateTime(2026, 1, 2));
+  check('E15 归档中的笔记同样并入', pick('n4').notebookId == 'nb2' && pick('n4').archived);
+  check('E16 清单外的笔记不受影响', pick('n2').notebookId == 'nb1');
+  await repo.clearNoteSections(const ['n2', 'ghost']);
+  final afterClear = await repo.all();
+  check('E17 清分区保留笔记本',
+      afterClear.where((item) => item.id == 'n2').single.notebookId == 'nb1' &&
+          afterClear.where((item) => item.id == 'n2').single.sectionId == null);
+  check('E18 无分区的笔记执行清分区仍然无分区',
+      afterClear.where((item) => item.id == 'ghost').single.sectionId == null);
+  final blank = await repo.create(title: '', content: '', notebookId: 'nb1');
+  check('E19 空白笔记判定', blank.isBlank);
+  check('E20 id 微秒级也不重复',
       (await repo.create(title: 'a', content: '')).id != (await repo.create(title: 'b', content: '')).id);
 
   // ---- F. 笔记本仓储层级动作 ----

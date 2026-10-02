@@ -17,23 +17,24 @@ and in-app **language / theme** settings. Everything is stored on-device through
 
 | Feature | Notes |
 | --- | --- |
-| Notebook hierarchy | Notebook > section group (optional) > section > page. The left tree creates, renames and deletes nodes; deleting a parent never loses notes, they fall back to "Unfiled". Legacy folder data is migrated to sections once at startup, ids preserved |
+| Notebook hierarchy | Notebook > section group (optional) > section (optional) > page. The left tree creates, renames and deletes nodes. Belonging to a notebook is mandatory (one notebook per note); the section is optional — notes without one sit under the **Unsectioned** row every notebook has. The first run creates "My Notebook"; deleting a notebook folds its notes into another notebook's Unsectioned, deleting a section only un-sections them. Legacy folder data is migrated to sections once at startup, ids preserved |
 | Multi-tab editor | Wide screens show three panes (tree / list / editor). The editor holds several notes as tabs; an unsaved tab shows a dot, right-click closes others or all. Narrow screens fall back to full-screen editing with a back button |
 | Autosave | 800 ms after you stop typing, and a final flush when a tab closes |
 | Three view modes | Edit / split (type left, rendered right) / preview |
 | Markdown toolbar | Bold, italic, heading, list, task list, code, quote, link, table, rule — toggling wrapped text unwraps it |
 | Wiki links | Write `[[page title]]`; clicking it in the preview opens that note in a new tab |
+| Preview line breaks | A single newline between two plain lines renders as a line break (the preview pre-processes them into Markdown hard breaks; fenced code, lists, tables, headings and quotes keep CommonMark's rules). Inline code gets a filled background so `` `code` `` is visible outside code blocks |
 | Live stats | Character count by grapheme cluster (emoji and CJK are never split), word count, line count |
 | Copy as Markdown | Copies "title + body" to the clipboard for quick export |
 | Pinning | Pinned notes always sort first; there is a dedicated tree view |
-| Trash | Deleting is soft: restore, delete forever, or empty the trash. The list's snack bar still offers undo |
-| Search + scopes | The tree picks the scope (all / notebook / group / section / pinned / unfiled / trash), the search box filters title, body and tags case-insensitively |
+| Archive | "Archive" in the list menu is a soft delete: un-archive or delete forever from the "Archived" view, or empty the archive in one go. The snack bar still offers undo |
+| Search + scopes | The tree picks the scope (all / pinned / archived / notebook / unsectioned / group / section), the search box filters title, body and tags case-insensitively |
 | Sorting | Recently modified / recently created / title A→Z |
 | Character display fix | Previews truncate by grapheme cluster, and toolbar edits snap selection ends to cluster boundaries, so neither can split a UTF-16 surrogate pair and leave `￼` in the text |
 | Tags | Multiple tags per note, one-tap filtering |
-| Language | Simplified Chinese / English / Japanese / Traditional Chinese, applied instantly and remembered |
+| Language | English by default; Simplified Chinese / English / Japanese / Traditional Chinese, applied instantly and remembered |
 | Theme | Six accent colours, plus system / light / dark |
-| Blank-note handling | A still-blank new draft is never persisted; clearing an existing note sends it to the trash |
+| Blank-note handling | A still-blank new draft is never persisted; clearing an existing note archives it |
 
 ## Keyboard shortcuts
 
@@ -60,7 +61,7 @@ lib/
 ├── main.dart                              # Bootstrap: SharedPreferences, inject repositories
 ├── app.dart                               # MaterialApp: theme, locale, HomeShell
 ├── models/
-│   ├── note.dart                          # Page model + JSON (section, pin, trash, stats)
+│   ├── note.dart                          # Page model + JSON (notebook + optional section, pin, archive, stats)
 │   ├── notebook.dart                      # Notebook / SectionGroup / Section
 │   ├── note_tab.dart                      # Runtime tab state, owns the editing controllers
 │   ├── note_filter.dart                   # Scope, keyword, tag, sort + matching
@@ -76,7 +77,7 @@ lib/
 ├── settings/settings_controller.dart      # ChangeNotifier: apply instantly, then persist
 ├── l10n/app_strings.dart                    # Four language tables behind typed getters
 ├── screens/
-│   ├── home_shell.dart                    # Three panes, tabs, autosave, trash, shortcuts
+│   ├── home_shell.dart                    # Three panes, tabs, autosave, archive, defaults
 │   └── settings_screen.dart               # Language / colour / theme mode
 ├── utils/
 │   ├── markdown_plain.dart                # Markdown → plain preview text
@@ -109,20 +110,23 @@ links under `windows/flutter/ephemeral/.plugin_symlinks`, which surfaces as
 One JSON document per entity, all under a single preference key each:
 
 ```
-argonote.notes.v1          # every note, including trashed ones
+argonote.notes.v1          # every note, including archived ones
 argonote.notebookTree.v1   # notebooks, section groups, sections
 argonote.settings.v1       # language, accent colour, theme mode
 argonote.folders.v1        # legacy: read once at startup, then superseded
 ```
 
 Reading a note still accepts `folderId` as `sectionId`, so an older file loads
-unchanged. Writes always use the new field.
+unchanged. Writes always use the new field. A note carries `notebookId` plus an optional
+`sectionId`; records written before `notebookId` existed get theirs inferred from their
+section on every load (and written back the next time that note is saved), so old
+organisation survives the upgrade.
 
 ## Tests
 
 ```bash
 flutter test                      # widget + unit tests
-dart run tool/selfcheck.dart      # 80 assertions on the pure-Dart layer, exit code = result
+dart run tool/selfcheck.dart      # 90 assertions on the pure-Dart layer, exit code = result
 ```
 
 ```
@@ -134,8 +138,8 @@ test/data/in_memory_note_repository_test.dart  # CRUD, pin, soft delete, unassig
 test/data/in_memory_notebook_repository_test.dart
 test/data/shared_prefs_notebook_repository_test.dart  # folders → sections migration
 test/utils/markdown_test.dart                  # Markdown → plain text, GFM tables
-test/utils/markdown_tools_test.dart            # toolbar edits, wiki-link preprocessing
-test/widgets/note_flow_test.dart               # three-pane flow, tabs, autosave, trash,
+test/utils/markdown_tools_test.dart            # toolbar edits, wiki-link preprocessing, soft-line-break padding
+test/widgets/note_flow_test.dart               # three-pane flow, tabs, autosave, archive,
                                                # wiki-link preview, shortcuts, language switch
 ```
 
@@ -144,6 +148,30 @@ repositories are pure Dart: on a machine where `flutter test` cannot start (some
 firewalls block the loopback socket the test runner needs, failing with
 "Connection closed before test suite loaded"), the logic layer can still be
 verified by the plain Dart VM.
+
+### Web debugging
+
+```bash
+flutter build web --release --no-web-resources-cdn
+python -m http.server 8080 --bind 0.0.0.0     # then open http://<your-LAN-IP>:8080/
+```
+
+Both flags matter on a restricted network:
+
+- **`--no-web-resources-cdn` is required.** By default the bundle downloads CanvasKit at
+  runtime from `https://www.gstatic.com/flutter-canvaskit`. When that host is unreachable
+  the page stays completely blank and the only clue is a failed load in the network panel —
+  nothing in the app itself is wrong. With the flag, `flutter_bootstrap.js` records
+  `"useLocalCanvasKit":true` and the renderer comes from `build/web/canvaskit/` on the same
+  origin.
+- **Do not serve on `localhost` / `127.0.0.1`.** Where loopback TCP is filtered, the browser
+  times out connecting to `127.0.0.1` just like any other process does, which reads like the
+  server never started. Bind `0.0.0.0` and use the machine's own IPv4 address from `ipconfig`.
+  `flutter run -d chrome` fails for the same reason: the tool has to reach Chrome's debug port
+  over loopback.
+
+Web storage lives in that origin's `localStorage` (the `shared_preferences` web backend), so it
+is separate from the desktop data and an empty first run is expected.
 
 ### Runtime harness `tool/runtime_harness.dart`
 
@@ -176,6 +204,9 @@ flutter build bundle -t tool/runtime_harness.dart      # compile only
   Input still goes through the real pipelines (`PlatformDispatcher.onKeyData` with
   `synthesized: true` for `ui.KeyData`), which is what lets this run cover
   `Ctrl+N` / `Ctrl+Tab` / `Ctrl+W`.
+- `ARGONOTE_FRESH=1` (with `ARGONOTE_WIDE=1`) boots an empty store instead, checking that
+  the first run creates "My Notebook" with its Unsectioned row, that a new draft inherits
+  the notebook, and that a blank draft is never persisted.
 - Do not switch it to `TestWidgetsFlutterBinding`: `LiveTestWidgetsFlutterBinding`
   takes over pointer dispatch and the synthesised taps stop landing.
 - Afterwards rebuild from the normal entry point (`flutter build bundle`) so

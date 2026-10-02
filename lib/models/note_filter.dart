@@ -17,7 +17,7 @@ enum NoteSort {
   }
 }
 
-/// 列表的树形选择范围：全部 / 某笔记本 / 某分区 / 回收站 / 置顶。
+/// 列表的树形选择范围：全部 / 某笔记本 / 某笔记本的未分区 / 某分区组 / 某分区 / 归档 / 置顶。
 ///
 /// 与 [NoteFilter]（关键词 / 标签 / 排序）叠加使用。
 class NoteScope {
@@ -25,20 +25,23 @@ class NoteScope {
 
   final NoteScopeKind kind;
 
-  /// kind 需要附加 id 时的目标 id（分区 / 笔记本）。
+  /// kind 需要附加 id 时的目标 id（笔记本 / 分区组 / 分区）。
   final String? id;
 
   static const NoteScope all = NoteScope._(NoteScopeKind.all, null);
   static const NoteScope pinned = NoteScope._(NoteScopeKind.pinned, null);
-  static const NoteScope trash = NoteScope._(NoteScopeKind.trash, null);
-  static const NoteScope unfiled = NoteScope._(NoteScopeKind.unfiled, null);
+  static const NoteScope archived = NoteScope._(NoteScopeKind.archived, null);
 
   const NoteScope.section(String sectionId) : this._(NoteScopeKind.section, sectionId);
   const NoteScope.notebook(String notebookId) : this._(NoteScopeKind.notebook, notebookId);
   const NoteScope.group(String groupId) : this._(NoteScopeKind.group, groupId);
+
+  /// 某个笔记本下「没有分区」的那批笔记，id 是笔记本 id。
+  const NoteScope.unsectioned(String notebookId)
+      : this._(NoteScopeKind.unsectioned, notebookId);
 }
 
-enum NoteScopeKind { all, pinned, trash, unfiled, section, notebook, group }
+enum NoteScopeKind { all, pinned, archived, section, unsectioned, notebook, group }
 
 /// 列表页的筛选条件：关键词 + 标签 + 排序。
 ///
@@ -75,7 +78,7 @@ class NoteFilter {
     );
   }
 
-  /// 判断一条笔记是否命中当前筛选条件（不含范围/回收站过滤）。
+  /// 判断一条笔记是否命中当前筛选条件（不含范围/归档过滤）。
   bool matches(Note note) {
     if (!_matchesTag(note)) return false;
     return _matchesKeyword(note);
@@ -96,10 +99,12 @@ class NoteFilter {
   }
 
   /// 先按范围/筛选过滤，再排序：置顶优先，其余按 [sort]。
-  List<Note> apply(List<Note> notes, NoteScope scope, {Set<String>? notebookSectionIds}) {
+  ///
+  /// [groupSectionIds] 只在分区组范围下用到（组内所有分区 id）。
+  List<Note> apply(List<Note> notes, NoteScope scope, {Set<String>? groupSectionIds}) {
     final result = <Note>[];
     for (final note in notes) {
-      if (_matchesScope(note, scope, notebookSectionIds) && matches(note)) {
+      if (_matchesScope(note, scope, groupSectionIds) && matches(note)) {
         result.add(note);
       }
     }
@@ -107,22 +112,25 @@ class NoteFilter {
     return result;
   }
 
-  bool _matchesScope(Note note, NoteScope scope, Set<String>? notebookSectionIds) {
+  bool _matchesScope(Note note, NoteScope scope, Set<String>? groupSectionIds) {
     switch (scope.kind) {
-      case NoteScopeKind.trash:
-        return note.trashed;
+      case NoteScopeKind.archived:
+        return note.archived;
       case NoteScopeKind.pinned:
-        if (note.trashed) return false;
+        if (note.archived) return false;
         return note.pinned;
       case NoteScopeKind.all:
-        return !note.trashed;
-      case NoteScopeKind.unfiled:
-        return !note.trashed && note.sectionId == null;
+        return !note.archived;
       case NoteScopeKind.section:
-        return !note.trashed && note.sectionId == scope.id;
-      case NoteScopeKind.group:
+        return !note.archived && note.sectionId == scope.id;
+      case NoteScopeKind.unsectioned:
+        return !note.archived && note.notebookId == scope.id && note.sectionId == null;
       case NoteScopeKind.notebook:
-        return !note.trashed && note.sectionId != null && (notebookSectionIds?.contains(note.sectionId) ?? false);
+        return !note.archived && note.notebookId == scope.id;
+      case NoteScopeKind.group:
+        return !note.archived &&
+            note.sectionId != null &&
+            (groupSectionIds?.contains(note.sectionId) ?? false);
     }
   }
 

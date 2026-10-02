@@ -32,7 +32,9 @@ class MarkdownView extends StatelessWidget {
       ),
       codeblockPadding: const EdgeInsets.all(12),
       code: (base.code ?? const TextStyle()).copyWith(
-        backgroundColor: Colors.transparent,
+        // 行内代码（工具栏 `<>` 就是单反引号）要有底色框才看得出是代码；
+        // 取和代码块一样的底色，代码块内部再叠一层也不会变色。
+        backgroundColor: theme.colorScheme.surfaceContainerHighest,
         // 'monospace' 是 Android 的逻辑字体名，Windows 上根本解析不到；
         // 命中不到字形时中文和 emoji 就先落到没有对应字形的字体上，
         // 表现为代码块/行内代码里「有时字符显示成方块」。这里换成真实字体

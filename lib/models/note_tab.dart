@@ -13,6 +13,7 @@ class NoteTab {
     String title = '',
     String content = '',
     List<String> tags = const <String>[],
+    this.notebookId,
     this.sectionId,
     this.pinned = false,
   })  : titleController = TextEditingController(text: title),
@@ -29,6 +30,9 @@ class NoteTab {
   final TextEditingController contentController;
 
   List<String> tags;
+
+  /// 归属：笔记本必填，分区可空（空即挂在该笔记本的「未分区」下）。
+  String? notebookId;
   String? sectionId;
   bool pinned;
 
@@ -51,6 +55,7 @@ class NoteTab {
     titleController.text = source.title;
     contentController.text = source.content;
     tags = <String>[...source.tags];
+    notebookId = source.notebookId;
     sectionId = source.sectionId;
     pinned = source.pinned;
     dirty = false;

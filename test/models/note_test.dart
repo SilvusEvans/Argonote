@@ -9,14 +9,14 @@ void main() {
       expect(note.createdAt.difference(note.updatedAt).abs(), Duration.zero);
       expect(note.sectionId, isNull);
       expect(note.pinned, isFalse);
-      expect(note.trashed, isFalse);
+      expect(note.archived, isFalse);
     });
 
-    test('isBlank：标题正文标签分区全空才算空', () {
+    test('isBlank：标题正文标签全空才算空，分区归属不参与', () {
       expect(Note.create().isBlank, isTrue);
       expect(Note.create(title: '  ').isBlank, isTrue);
       expect(Note.create(tags: const <String>['x']).isBlank, isFalse);
-      expect(Note.create(sectionId: 's').isBlank, isFalse);
+      expect(Note.create(sectionId: 's').isBlank, isTrue);
       expect(Note.create(content: '# hi').isBlank, isFalse);
     });
 
@@ -31,10 +31,12 @@ void main() {
       expect(later.sectionId, 'sec');
     });
 
-    test('copyWith 哨兵：不传 sectionId 保持原值，显式传 null 清空', () {
-      final note = Note.create(sectionId: 'sec');
+    test('copyWith 哨兵：不传归属保持原值，显式传 null 清空', () {
+      final note = Note.create(notebookId: 'nb', sectionId: 'sec');
       expect(note.copyWith(title: 'x').sectionId, 'sec');
+      expect(note.copyWith(title: 'x').notebookId, 'nb');
       expect(note.copyWith(sectionId: null).sectionId, isNull);
+      expect(note.copyWith(notebookId: null).notebookId, isNull);
       expect(note.copyWith(deletedAt: null).deletedAt, isNull);
     });
 
@@ -43,15 +45,17 @@ void main() {
         title: '标题',
         content: '正文',
         tags: const <String>['a', 'b'],
+        notebookId: 'nb-1',
         sectionId: 'sec-1',
       );
-      final moved = note.copyWith(trashed: true, deletedAt: DateTime.now());
+      final moved = note.copyWith(archived: true, deletedAt: DateTime.now());
 
       final restored = Note.fromJson(moved.toJson());
       expect(restored.id, note.id);
       expect(restored.tags, <String>['a', 'b']);
+      expect(restored.notebookId, 'nb-1');
       expect(restored.sectionId, 'sec-1');
-      expect(restored.trashed, isTrue);
+      expect(restored.archived, isTrue);
       expect(restored.deletedAt, isNotNull);
     });
 

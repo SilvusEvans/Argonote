@@ -77,4 +77,29 @@ void main() {
       expect(wikiLinkTarget('https://a.com'), isNull);
     });
   });
+
+  group('applySoftLineBreaks', () {
+    test('相邻普通文字行补成硬换行', () {
+      expect(applySoftLineBreaks('第一行\n第二行'), '第一行  \n第二行');
+    });
+
+    test('重复执行不再叠加空格', () {
+      final once = applySoftLineBreaks('第一行\n第二行');
+      expect(applySoftLineBreaks(once), once);
+    });
+
+    test('空行、块级语法相邻处不补', () {
+      expect(applySoftLineBreaks('甲\n\n乙'), '甲\n\n乙');
+      expect(applySoftLineBreaks('正文\n- 项目'), '正文\n- 项目');
+      expect(applySoftLineBreaks('# 标题\n正文'), '# 标题\n正文');
+    });
+
+    test('引用块内部照样断行', () {
+      expect(applySoftLineBreaks('> 引一\n> 引二'), '> 引一  \n> 引二');
+    });
+
+    test('围栏代码块内部原样保留', () {
+      expect(applySoftLineBreaks('```\na\nb\n```'), '```\na\nb\n```');
+    });
+  });
 }
