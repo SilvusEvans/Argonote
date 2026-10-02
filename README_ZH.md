@@ -2,48 +2,53 @@
 
 # Argonote
 
-一个用 Flutter 写的极简笔记应用：支持笔记的**创建、编辑、删除、列表展示**，正文支持 **Markdown**，可用**标签**和**文件夹**归类筛选，界面语言和主题配色可在**应用内设置**里切换，数据通过 `shared_preferences` 持久化在本地。
+一个用 Flutter 写的本地笔记应用：OneNote 式的**笔记本 → 分区组 → 分区 → 页面**层级、桌面**多标签页**编辑、正文支持 **Markdown**（含 `[[双链]]` 跳转），可用**标签**归类筛选，界面语言和主题配色可在**应用内设置**里切换，数据通过 `shared_preferences` 持久化在本地。
 
 - 框架：Flutter 3.47 / Dart 3.13（Material 3）
 - 平台：Android / iOS / Windows / macOS / Linux / Web
-- 依赖：`shared_preferences`（存储）、`flutter_markdown_plus` + `markdown`（Markdown 渲染）、`flutter_localizations`（组件本地化）
+- 依赖：`shared_preferences`（存储）、`flutter_markdown_plus` + `markdown`（Markdown 渲染）、`characters`（字素安全截断/计数）、`flutter_localizations`（组件本地化）
 
 ## 功能
 
 | 功能 | 说明 |
 | --- | --- |
-| 新建 | 首页右下角「写笔记」，进入编辑页写标题和正文 |
-| 编辑 | 点击列表任意一条进入编辑页，改完点「保存」或直接返回（自动保存） |
-| 删除 | 列表项**向左滑动**触发，二次确认后删除；编辑页右上角也有删除入口 |
-| 撤销删除 | 删除后底部 SnackBar 提供「撤销」，连同原始 id 和创建时间一起还原 |
-| Markdown | 正文支持标题、列表、代码块、链接、表格、引用；编辑页「编辑 / 预览」页签切换 |
-| 标签 | 每条笔记可打多个标签，列表可按标签筛选 |
-| 文件夹 | 笔记可归入文件夹，列表可按文件夹筛选；文件夹支持新建 / 重命名 / 删除 |
-| 搜索 | 顶部搜索框，标题 / 正文 / 标签不区分大小写匹配，实时过滤 |
-| 排序 | 按最近编辑时间倒序，刚改过的排在最前 |
-| 自动保存 | 编辑页返回时（返回键 / 手势）自动落库，不会白写 |
-| 界面语言 | 设置页可切换简体中文 / English / 日本語 / 繁體中文，立即生效并记住选择 |
-| 主题配色 | 设置页可切换 6 种主色，以及跟随系统 / 浅色 / 深色 |
-| 空笔记处理 | 标题、正文、标签、文件夹全为空则不保存；把已有笔记清空则视为删除 |
+| 笔记本体系 | OneNote 风格层级：笔记本 > 分区组（可选）> 分区 > 页面；左侧树支持新建 / 重命名 / 删除，删父级不丢笔记（降级为「未分组」）。旧版文件夹数据启动时自动迁移成分区 |
+| 多标签页 | 桌面宽屏三栏（树 / 页面列表 / 编辑器），编辑器可同时打开多篇笔记为标签；未保存显示圆点、右键可关闭其它/全部标签；窄屏自动回退整屏编辑 |
+| 新建 / 编辑 | 列表右上角「+」新建标签页；输入停顿 800ms 自动保存，关标签、切走也不丢 |
+| 三视图 | 编辑 / 分栏（左写右渲）/ 预览三种模式一键切换 |
+| 编辑工具栏 | 加粗、斜体、标题、列表、任务列表、代码、引用、链接、表格、分割线一键插入，已包裹的内容再点即剥离 |
+| Markdown 双链 | 正文写 `[[另一页标题]]`，预览点击直接打开对应笔记标签页 |
+| 统计 | 实时显示字符（按字素簇，emoji/中文不拆坏）、字数、行数 |
+| 复制为 Markdown | 一键把「标题 + 正文」复制到剪贴板，方便导出 |
+| 置顶 | 任意笔记可置顶，永远排在列表最前；左树有「置顶」视图 |
+| 回收站 | 删除先进回收站（软删除），可还原或彻底删除，支持一键清空；列表删除的 SnackBar 仍可撤销 |
+| 搜索 | 左树定位范围（全部 / 笔记本 / 分区 / 未分组）+ 关键词实时过滤标题 / 正文 / 标签 |
+| 排序 | 最近修改 / 最近创建 / 标题升序，三种可切换 |
+| 字符显示修复 | 摘要截断与工具栏编辑都按字素簇切分，选区端点落在半截 emoji 上时自动外扩到完整字素，不再产生孤立代理对（渲染成替换符） |
+| 标签 | 每条笔记可打多个标签，列表有标签快筛条 |
+| 界面语言 | 简体中文 / English / 日本語 / 繁體中文，立即生效并记住选择 |
+| 主题配色 | 6 种主色 + 跟随系统 / 浅色 / 深色 |
+| 空笔记处理 | 全空的新笔记不落库；把已有笔记清空则自动进回收站 |
 
 ## 目录结构
 
 ```
 lib/
 ├── main.dart                              # 入口：初始化 SharedPreferences，注入仓储与设置控制器
-├── app.dart                               # MaterialApp：主题、语言、本地化、首页
+├── app.dart                               # MaterialApp：主题、语言、本地化、首页 HomeShell
 ├── models/
-│   ├── note.dart                          # 笔记模型 + JSON 序列化（纯 Dart / 含标签与文件夹）
-│   ├── folder.dart                        # 文件夹模型
-│   ├── note_filter.dart                   # 筛选条件（关键词 + 文件夹 + 标签）与匹配逻辑
+│   ├── note.dart                          # 页面（笔记）模型 + JSON 序列化（分区/置顶/回收站/字素统计）
+│   ├── notebook.dart                      # 笔记本 / 分区组 / 分区 模型
+│   ├── note_tab.dart                      # 编辑器标签页运行时状态（持有输入控制器）
+│   ├── note_filter.dart                   # 筛选（关键词/标签/排序）+ 左树范围 NoteScope 与匹配逻辑
 │   └── app_settings.dart                  # 应用设置（语言 / 主色 / 深浅模式）
 ├── data/
 │   ├── note_repository.dart               # 笔记仓储抽象接口
 │   ├── shared_prefs_note_repository.dart  # 笔记：shared_preferences 持久化实现
 │   ├── in_memory_note_repository.dart     # 笔记：内存实现（测试用）
-│   ├── folder_repository.dart             # 文件夹仓储抽象接口
-│   ├── shared_prefs_folder_repository.dart
-│   ├── in_memory_folder_repository.dart
+│   ├── notebook_repository.dart           # 笔记本体系仓储抽象接口
+│   ├── shared_prefs_notebook_repository.dart  # 含旧版文件夹 → 分区的一次性迁移
+│   ├── in_memory_notebook_repository.dart
 │   ├── settings_repository.dart           # 设置仓储抽象接口
 │   ├── shared_prefs_settings_repository.dart
 │   └── in_memory_settings_repository.dart
@@ -52,17 +57,19 @@ lib/
 ├── l10n/
 │   └── app_strings.dart                   # 四语言文案表（简中 / 英 / 日 / 繁中）
 ├── screens/
-│   ├── note_list_screen.dart              # 列表页：搜索 / 筛选 / 侧滑删除 / 新建 / 设置入口
-│   ├── note_edit_screen.dart              # 编辑页：Markdown 编辑与预览 / 标签 / 文件夹 / 保存
+│   ├── home_shell.dart                    # 三栏外壳：树 / 列表 / 标签编辑器 + 自动保存 + 回收站
 │   └── settings_screen.dart               # 设置页：语言、主色、外观（MD3）
 ├── widgets/
-│   ├── note_tile.dart                     # 单条笔记展示（含标签、文件夹标记）
-│   ├── filter_bar.dart                    # 文件夹 / 标签筛选栏
+│   ├── notebook_tree.dart                 # OneNote 风格左树（右键/更多菜单增删改）
+│   ├── note_tile.dart                     # 单条笔记展示（置顶、分区、动作菜单）
+│   ├── tab_strip.dart                     # 多标签条（脏标记、中键区域右键菜单、溢出滚动）
+│   ├── note_editor.dart                   # 编辑器面板（工具栏/三视图/分区归属/标签/统计）
 │   ├── folder_manager.dart                # 文件夹管理弹窗（新建 / 重命名 / 删除）
 │   └── markdown_view.dart                 # Markdown 渲染视图（GFM）
 └── utils/
     ├── date_format.dart                   # 极简时间格式化
-    └── markdown_plain.dart                # Markdown → 纯文本（列表摘要用）
+    ├── markdown_tools.dart                # 工具栏插入/包裹、[[双链]]预处理（纯函数）
+    └── markdown_plain.dart                # Markdown → 纯文本（列表摘要用，字素安全截断）
 ```
 
 ## 跑起来
@@ -157,25 +164,45 @@ MarkdownBody(
 Note.create(content: '# 标题\n\n- 第一项').plainPreview;   // => '标题 第一项'
 ```
 
-## 标签与文件夹
+## 标签与笔记本体系
 
 ```dart
 class Note {
-  final List<String> tags;   // 标签
-  final String? folderId;    // 所属文件夹；null = 未归类
+  final List<String> tags;    // 标签
+  final String? sectionId;    // 所属分区；null = 未分组
+  final bool pinned;          // 置顶
+  final bool trashed;         // 在回收站里（软删除）
 }
 ```
 
-- 编辑页底部：文件夹用 `PopupMenuButton` 选（含「未归类」和「新建文件夹」），标签用 `Chip` + `ActionChip` 增删
-- 列表页顶部 `FilterBar`：文件夹一行、标签一行，都是横滑的 `FilterChip`，可叠加关键词一起筛
-- 筛选逻辑抽成 `models/note_filter.dart`，可以单独单测：
+- 编辑器底部元信息行：分区用 `PopupMenuButton` 选（列出「未分组」和全部 `笔记本 / 分区`），标签用 `Chip` 增删
+- 左侧 `NotebookTree` 决定「看哪个范围」，顶部搜索框决定「匹配什么」，两者互不耦合
+- 范围 + 筛选 + 排序全部抽进 `models/note_filter.dart`，纯 Dart，可单独跑断言：
 
 ```dart
-const filter = NoteFilter(folderId: 'folder-1', tag: '工作', keyword: '周报');
-final visible = notes.where(filter.matches).toList();
+const scope = NoteScope.notebook('nb-1');
+final visible = const NoteFilter(tag: '工作', keyword: '周报')
+    .apply(notes, scope, notebookSectionIds: {'s-1', 's-2'});
 ```
 
-- 删除文件夹只解除归属关系，笔记本身不会丢（列表里显示为「未归类」）
+- 删除分区 / 分区组 / 笔记本只解除归属，笔记本身不丢（落回「未分组」）；删除走回收站，可还原
+
+## 键盘快捷键
+
+桌面端在 `HomeShell` 上用 `CallbackShortcuts` 注册（Windows 上这些组合键都不会和文本框的默认编辑快捷键冲突）：
+
+| 快捷键 | 作用 |
+| --- | --- |
+| `Ctrl+N` | 新建一个空白标签页 |
+| `Ctrl+W` | 关闭当前标签页（关之前会把未保存内容落库） |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | 在标签页之间前后循环 |
+| `Ctrl+S` | 立即保存当前标签页（不等 800ms 自动保存） |
+
+`CallbackShortcuts` 只有在焦点落在它的子树内时才会命中，而"点列表条目 / 点分区"这类操作
+并不必然让某个节点拿到焦点（`primaryFocus` 会停在最外层的 `FocusScope`，此时按组合键没有
+反应）。所以 shell 在快捷键作用域内部放了一个 `Focus(autofocus: true, skipTraversal: true)`
+锚点，保证刚打开软件、还没点进任何输入框时这些组合键就可用；`skipTraversal` 让它不参与
+Tab 遍历，不会打断正常的焦点跳转。
 
 ## 关键代码说明
 
@@ -354,18 +381,75 @@ class AppStrings {
 
 ```
 test/models/note_test.dart                      # 模型序列化、标签/文件夹、Markdown 摘要
-test/models/note_filter_test.dart               # 关键词 / 标签 / 文件夹筛选组合
+test/models/note_filter_test.dart               # 范围（笔记本/分区/未分组/置顶/回收站）+ 排序 + 关键词/标签
 test/models/app_settings_test.dart              # 设置序列化、四语言文案齐全性
-test/data/in_memory_note_repository_test.dart   # 笔记 CRUD + 撤销还原
-test/data/in_memory_folder_repository_test.dart # 文件夹 CRUD
+test/data/in_memory_note_repository_test.dart   # 笔记 CRUD、置顶、软删除、解除分区
+test/data/in_memory_notebook_repository_test.dart   # 笔记本 / 分区组 / 分区 层级动作
+test/data/shared_prefs_notebook_repository_test.dart # 旧文件夹 → 分区的一次性迁移与往返读写
+test/l10n/app_strings_test.dart                 # 四种语言 key 完整性与回退
 test/utils/markdown_test.dart                   # Markdown → 纯文本 + GFM 解析（含表格）
-test/widgets/note_flow_test.dart                # 建-改-删全流程、搜索、标签/文件夹筛选、
-                                                # Markdown 预览页签、设置页切换语言生效
+test/utils/markdown_tools_test.dart             # 工具栏包裹/前缀/插块 + 双链预处理
+test/widgets/note_flow_test.dart                # 三栏全流程、多标签开关、自动保存、回收站还原、
+                                                # 双链预览、窄屏返回、快捷键、切换语言生效
 ```
+
+## 跑测试与自检
+
+```bash
+flutter test                      # Widget + 单元测试
+dart run tool/selfcheck.dart      # 纯逻辑层断言（80 项），退出码即结果
+```
+
+`tool/selfcheck.dart` 不依赖 Flutter 运行时：模型、筛选、文本工具、内存仓储都是纯 Dart，
+所以遇到 `flutter test` 跑不起来的环境（例如回环 TCP 被本机防火墙/安全软件拦掉，测试套件
+会在 "Connection closed before test suite loaded" 处失败）时，仍然可以用 Dart VM 直接验证逻辑层。
+
+### 运行时自检 `tool/runtime_harness.dart`
+
+逻辑层之外还需要「界面真的渲染出来了」的证据。`flutter test` 要连回环 VM Service、
+`flutter build windows` 要为插件建符号链接，两者都可能被本机环境挡掉；`flutter_tester`
+这两样都不需要，于是 harness 把真实的 `ArgonoteApp`（内存仓储 + 一批含中文标点、Emoji、
+ZWJ 序列、代码块、表格、双链的种子数据）装进 `flutter_tester`，用合成指针事件点界面，
+每步断言界面上确实出现/没出现相应文字，再把 `RepaintBoundary` 光栅化成 PNG 落盘。
+
+```bash
+# 1) 只编译 Dart（-t 指向 harness，不动 lib/main.dart）
+flutter build bundle -t tool/runtime_harness.dart
+
+# 2) 离屏运行；$SDK 是 Flutter SDK 根目录
+$SDK/bin/cache/artifacts/engine/windows-x64/flutter_tester.exe \
+  --non-interactive --enable-software-rendering \
+  --flutter-assets-dir=build/flutter_assets \
+  --packages=.dart_tool/package_config.json \
+  --icu-data-file-path=$SDK/bin/cache/artifacts/engine/windows-x64/icudtl.dat \
+  build/flutter_assets/kernel_blob.bin
+```
+
+- `ARGONOTE_SHOT_DIR`：截图输出目录，默认 `D:/tmp/runtime`，换成自己的可写目录即可。
+- 退出码 0 = 全部断言通过；未通过项逐行打印 `FAIL …`，末尾 `DONE failures=N`。
+- 最后一张 `10_zoom.png` 用 6 倍像素比放大预览页，专门用来看字形有没有缺（emoji、码点回退）。
+- `ARGONOTE_WIDE=1` 再跑一轮走桌面三栏分支：`flutter_tester` 的窗口固定 800×600 逻辑像素，
+  低于 `HomeShell` 的 `_wideBreakpoint(920)`，所以 harness 用 `MediaQuery` 覆盖 + 直接改
+  `RenderView.configuration` 把根视图撑到 1440×900。指针事件与 KeyEvent 仍走框架真实管线
+  （键盘从 `PlatformDispatcher.onKeyData` 注入 `ui.KeyData`，`synthesized: true` 才会立刻
+  flush 成 KeyMessage），因此这一轮能同时验证 `Ctrl+N` / `Ctrl+Tab` / `Ctrl+W`。
+- 注意别用 `TestWidgetsFlutterBinding`：`LiveTestWidgetsFlutterBinding` 会接管指针事件分发，
+  合成点击全部失效。
+- 跑完记得 `flutter build bundle`（默认入口 `lib/main.dart`）覆盖回去，否则
+  `build/flutter_assets` 里留的是 harness 的 kernel。
 
 ## 已知事项
 
-- Windows 桌面端运行时，Flutter 需要为插件创建目录符号链接
-  （`windows/flutter/ephemeral/.plugin_symlinks`）。若提示 `ERROR_INVALID_FUNCTION`，
-  开启系统「开发者模式」或以管理员身份运行即可；Android / iOS / Web 不受影响。
-- Markdown 预览里的链接点击后会以 SnackBar 显示地址（没有引入 `url_launcher`，不主动跳转外链）。
+- Windows 桌面端构建时，Flutter 需要为插件创建目录符号链接
+  （`windows/flutter/ephemeral/.plugin_symlinks`）。这要求两件事同时满足：
+  项目所在分区是 NTFS（exFAT / FAT32 不支持符号链接，会报 `ERROR_INVALID_FUNCTION`），
+  并且系统已开启「开发者模式」或以管理员身份运行。Android / iOS / Web 不受影响。
+- 代码块与行内代码指定了 `Consolas` + 中文 / emoji 回退字体，而不是 Android 的逻辑字体名
+  `monospace`（Windows 解析不到该名，会让代码块里的中文和 emoji 显示成方块）。
+- Windows 的 Segoe UI Emoji 不带「区域指示符」旗标字形，所以国旗类 emoji（两个区域
+  指示符拼成的序列）在 Windows 桌面端会显示成 `CN` 这样的两个字母（macOS / Android
+  正常）。这是系统字体缺失，不是渲染链路的问题；要显示旗标只能自带一套旗标字体。
+  家庭 / 职业这类 ZWJ 组合序列（`👨‍👩‍👧‍👑`、`👨💻`）能正常合成，
+  运行时截图里已逐字确认。
+- Markdown 预览里的 `http(s)` 链接点击后只显示地址、不会跳浏览器（没有引入 `url_launcher`）；
+  `[[双链]]` 则按标题匹配打开对应笔记的标签页。

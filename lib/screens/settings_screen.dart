@@ -35,7 +35,7 @@ class SettingsScreen extends StatelessWidget {
                   groupValue: settings.language,
                   onChanged: (value) {
                     if (value == null) return;
-                    _apply(context, () => controller.setLanguage(value), strings);
+                    _apply(context, () => controller.setLanguage(value));
                   },
                   child: Column(
                     children: [
@@ -61,7 +61,7 @@ class SettingsScreen extends StatelessWidget {
                       _ColorSwatch(
                         color: color,
                         selected: settings.seedColor.toARGB32() == color.toARGB32(),
-                        onTap: () => _apply(context, () => controller.setSeedColor(color), strings),
+                        onTap: () => _apply(context, () => controller.setSeedColor(color)),
                       ),
                   ],
                 ),
@@ -91,14 +91,14 @@ class SettingsScreen extends StatelessWidget {
                     ],
                     selected: <ThemeMode>{settings.themeMode},
                     onSelectionChanged: (selection) {
-                      _apply(context, () => controller.setThemeMode(selection.first), strings);
+                      _apply(context, () => controller.setThemeMode(selection.first));
                     },
                   ),
                 ),
               ),
               const SizedBox(height: 20),
               OutlinedButton.icon(
-                onPressed: () => _apply(context, controller.restoreDefaults, strings),
+                onPressed: () => _apply(context, controller.restoreDefaults),
                 icon: const Icon(Icons.restart_alt),
                 label: Text(strings.restoreDefaults),
               ),
@@ -110,8 +110,16 @@ class SettingsScreen extends StatelessWidget {
   }
 
   /// 统一处理「改设置 → 提示已保存」。
-  void _apply(BuildContext context, Future<void> Function() action, AppStrings strings) {
-    action();
+  ///
+  /// 提示文案必须等这一帧重建之后再取：改语言的那一次操作会让整棵
+  /// MaterialApp 用新 locale 重建，若在 await 之前读 AppStrings，
+  /// 切到英文后弹出的确认条还是旧语言（中文）的。
+  Future<void> _apply(BuildContext context, Future<void> Function() action) async {
+    await action();
+    WidgetsBinding.instance.scheduleFrame();
+    await WidgetsBinding.instance.endOfFrame;
+    if (!context.mounted) return;
+    final strings = AppStrings.of(context);
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
       ..showSnackBar(

@@ -1,4 +1,5 @@
 [English](./README.md) · [简体中文](./README_ZH.md) · [繁體中文](./README_ZH-TW.md) · [日本語](./README_JA.md) · [日本語（ひらがな）](./README_JA-HIRA.md) · [Français](./README_FR.md) · Русский
+> **Doc status / 文档状态:** this translation still describes the v1 folder UI. The app now uses the notebook / section group / section / page hierarchy with multi-tab editing, trash, pinning and wiki links - see [README.md](./README.md) or [README_ZH.md](./README_ZH.md).
 
 # Argonote
 

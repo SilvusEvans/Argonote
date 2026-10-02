@@ -16,6 +16,7 @@ class SharedPrefsNoteRepository implements NoteRepository {
   SharedPrefsNoteRepository(this._prefs);
 
   /// 带版本号的 key，以后改数据结构时可以平滑迁移。
+  /// v1 的旧数据（folderId）由 Note.fromJson 直接兼容读取，无需换 key。
   static const String storageKey = 'argonote.notes.v1';
 
   final SharedPreferences _prefs;
@@ -37,13 +38,19 @@ class SharedPrefsNoteRepository implements NoteRepository {
     required String title,
     required String content,
     List<String> tags = const <String>[],
-    String? folderId,
+    String? sectionId,
+    bool pinned = false,
   }) async {
-    final note = Note.create(
+    final now = DateTime.now();
+    final note = Note(
+      id: Note.create().id,
       title: title,
       content: content,
+      createdAt: now,
+      updatedAt: now,
       tags: tags,
-      folderId: folderId,
+      sectionId: sectionId,
+      pinned: pinned,
     );
     final notes = await _readAll();
     await _writeAll(<Note>[note, ...notes]);
@@ -56,25 +63,41 @@ class SharedPrefsNoteRepository implements NoteRepository {
     required String title,
     required String content,
     required List<String> tags,
-    String? folderId,
+    String? sectionId,
   }) async {
     final notes = await _readAll();
     final index = notes.indexWhere((note) => note.id == id);
     if (index == -1) {
       // 目标不存在时退化成新增，避免调用方拿到空而崩。
-      return create(title: title, content: content, tags: tags, folderId: folderId);
+      return create(title: title, content: content, tags: tags, sectionId: sectionId);
     }
     final updated = notes[index].copyWith(
       title: title,
       content: content,
-      updatedAt: DateTime.now(),
+      updatedAt: notes[index].bumpedUpdatedAt(),
       tags: tags,
-      folderId: folderId,
+      sectionId: sectionId,
     );
     notes[index] = updated;
     await _writeAll(notes);
     return updated;
   }
+
+  @override
+  Future<Note> setPinned(String id, bool pinned) => _patch(id, (note) {
+        // 置顶不算编辑，保留原 updatedAt，避免打乱「最近修改」排序。
+        return note.copyWith(pinned: pinned, updatedAt: note.updatedAt);
+      });
+
+  @override
+  Future<Note> moveToTrash(String id) => _patch(id, (note) {
+        return note.copyWith(trashed: true, deletedAt: DateTime.now(), updatedAt: note.updatedAt);
+      });
+
+  @override
+  Future<Note> restoreFromTrash(String id) => _patch(id, (note) {
+        return note.copyWith(trashed: false, deletedAt: null, updatedAt: note.updatedAt);
+      });
 
   @override
   Future<void> delete(String id) async {
@@ -89,6 +112,31 @@ class SharedPrefsNoteRepository implements NoteRepository {
     notes.removeWhere((item) => item.id == note.id);
     notes.add(note);
     await _writeAll(notes);
+  }
+
+  @override
+  Future<void> unassignSections(Set<String> sectionIds) async {
+    if (sectionIds.isEmpty) return;
+    final notes = await _readAll();
+    var changed = false;
+    for (var i = 0; i < notes.length; i++) {
+      final sectionId = notes[i].sectionId;
+      if (sectionId != null && sectionIds.contains(sectionId)) {
+        notes[i] = notes[i].copyWith(sectionId: null, updatedAt: notes[i].updatedAt);
+        changed = true;
+      }
+    }
+    if (changed) await _writeAll(notes);
+  }
+
+  Future<Note> _patch(String id, Note Function(Note note) transform) async {
+    final notes = await _readAll();
+    final index = notes.indexWhere((note) => note.id == id);
+    if (index == -1) throw StateError('note not found: $id');
+    final updated = transform(notes[index]);
+    notes[index] = updated;
+    await _writeAll(notes);
+    return updated;
   }
 
   Future<List<Note>> _readAll() async {

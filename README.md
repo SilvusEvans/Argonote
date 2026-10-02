@@ -1,370 +1,196 @@
-English · [简体中文](./README_ZH.md) · [繁體中文](./README_ZH-TW.md) · [日本語](./README_JA.md) · [日本語（ひらがな）](./README_JA-HIRA.md) · [Français](./README_FR.md) · [Русский](./README_RU.md)
+[简体中文](./README_ZH.md) · English · [繁體中文](./README_ZH-TW.md) · [日本語](./README_JA.md) · [日本語（ひらがな）](./README_JA-HIRA.md) · [Français](./README_FR.md) · [Русский](./README_RU.md)
 
 # Argonote
 
-A minimal note-taking app built with Flutter: **create, edit, delete and list** notes, **Markdown** support in the body, **tags** and **folders** for organisation, an in-app **settings** screen for language and colour theme, and **local persistence** via `shared_preferences`.
+A local-first note app written in Flutter, with an OneNote-style hierarchy
+(**notebook → section group → section → page**), **multi-tab editing** on the desktop,
+**Markdown** body text including `[[wiki links]]`, **tags** for cross-cutting filtering,
+and in-app **language / theme** settings. Everything is stored on-device through
+`shared_preferences` — no account, no server.
 
 - Framework: Flutter 3.47 / Dart 3.13 (Material 3)
 - Platforms: Android / iOS / Windows / macOS / Linux / Web
-- Dependencies: `shared_preferences` (storage), `flutter_markdown_plus` + `markdown` (Markdown rendering), `flutter_localizations` (widget localisation)
+- Dependencies: `shared_preferences` (storage), `flutter_markdown_plus` + `markdown`
+  (rendering), `characters` (grapheme-safe truncation and counting), `flutter_localizations`
 
 ## Features
 
-| Feature | Description |
+| Feature | Notes |
 | --- | --- |
-| Create | Tap “New note” at the bottom right and write a title and body |
-| Edit | Tap any note in the list; save with the button or just go back (auto-save) |
-| Delete | **Swipe a list item to the left**, confirm, and it is gone; the edit screen has a delete action too |
-| Undo delete | A SnackBar offers “Undo”, restoring the original id and creation time |
-| Markdown | Headings, lists, code blocks, links, tables and quotes; switch between “Edit” and “Preview” tabs |
-| Tags | Any number of tags per note; filter the list by tag |
-| Folders | File notes into folders and filter by folder; folders can be created, renamed and deleted |
-| Search | Search box at the top, case-insensitive over title / body / tags, live filtering |
-| Ordering | Sorted by last edit time, most recent first |
-| Auto-save | Leaving the edit screen (back button / gesture) persists everything |
-| Language | Switch between 简体中文 / English / 日本語 / 繁體中文 in Settings; applies instantly and is remembered |
-| Theme colour | 6 primary colours plus system / light / dark appearance |
-| Empty notes | A note with no title, body, tag or folder is not saved; clearing an existing note deletes it |
+| Notebook hierarchy | Notebook > section group (optional) > section > page. The left tree creates, renames and deletes nodes; deleting a parent never loses notes, they fall back to "Unfiled". Legacy folder data is migrated to sections once at startup, ids preserved |
+| Multi-tab editor | Wide screens show three panes (tree / list / editor). The editor holds several notes as tabs; an unsaved tab shows a dot, right-click closes others or all. Narrow screens fall back to full-screen editing with a back button |
+| Autosave | 800 ms after you stop typing, and a final flush when a tab closes |
+| Three view modes | Edit / split (type left, rendered right) / preview |
+| Markdown toolbar | Bold, italic, heading, list, task list, code, quote, link, table, rule — toggling wrapped text unwraps it |
+| Wiki links | Write `[[page title]]`; clicking it in the preview opens that note in a new tab |
+| Live stats | Character count by grapheme cluster (emoji and CJK are never split), word count, line count |
+| Copy as Markdown | Copies "title + body" to the clipboard for quick export |
+| Pinning | Pinned notes always sort first; there is a dedicated tree view |
+| Trash | Deleting is soft: restore, delete forever, or empty the trash. The list's snack bar still offers undo |
+| Search + scopes | The tree picks the scope (all / notebook / group / section / pinned / unfiled / trash), the search box filters title, body and tags case-insensitively |
+| Sorting | Recently modified / recently created / title A→Z |
+| Character display fix | Previews truncate by grapheme cluster, and toolbar edits snap selection ends to cluster boundaries, so neither can split a UTF-16 surrogate pair and leave `￼` in the text |
+| Tags | Multiple tags per note, one-tap filtering |
+| Language | Simplified Chinese / English / Japanese / Traditional Chinese, applied instantly and remembered |
+| Theme | Six accent colours, plus system / light / dark |
+| Blank-note handling | A still-blank new draft is never persisted; clearing an existing note sends it to the trash |
+
+## Keyboard shortcuts
+
+Registered with `CallbackShortcuts` in `HomeShell`. None of these collide with
+Flutter's default text-editing bindings on Windows, so they work while the caret is in a field.
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+N` | New blank tab |
+| `Ctrl+W` | Close the current tab (saves first if needed) |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Cycle tabs forward / backward |
+| `Ctrl+S` | Save the current tab immediately |
+
+`CallbackShortcuts` only fires while focus sits inside its subtree, and clicking a list
+row or a section does not necessarily move focus anywhere (`primaryFocus` stays on the
+outermost `FocusScope`). The shell therefore wraps itself in a
+`Focus(autofocus: true, skipTraversal: true)` anchor, so the bindings work straight
+after launch; `skipTraversal` keeps the anchor out of Tab traversal.
 
 ## Project structure
 
 ```
 lib/
-├── main.dart                              # Entry point: init SharedPreferences, inject repositories
-├── app.dart                               # MaterialApp: theme, locale, localisation, home
+├── main.dart                              # Bootstrap: SharedPreferences, inject repositories
+├── app.dart                               # MaterialApp: theme, locale, HomeShell
 ├── models/
-│   ├── note.dart                          # Note model + JSON (pure Dart, with tags and folder)
-│   ├── folder.dart                        # Folder model
-│   ├── note_filter.dart                   # Filter (keyword + folder + tag) and matching logic
-│   └── app_settings.dart                  # App settings (language / seed colour / theme mode)
+│   ├── note.dart                          # Page model + JSON (section, pin, trash, stats)
+│   ├── notebook.dart                      # Notebook / SectionGroup / Section
+│   ├── note_tab.dart                      # Runtime tab state, owns the editing controllers
+│   ├── note_filter.dart                   # Scope, keyword, tag, sort + matching
+│   └── app_settings.dart                  # Language / accent / theme mode
 ├── data/
-│   ├── note_repository.dart               # Note repository interface
-│   ├── shared_prefs_note_repository.dart  # Notes: shared_preferences implementation
-│   ├── in_memory_note_repository.dart     # Notes: in-memory implementation (tests)
-│   ├── folder_repository.dart             # Folder repository interface
-│   ├── shared_prefs_folder_repository.dart
-│   ├── in_memory_folder_repository.dart
-│   ├── settings_repository.dart           # Settings repository interface
-│   ├── shared_prefs_settings_repository.dart
-│   └── in_memory_settings_repository.dart
-├── settings/
-│   └── settings_controller.dart           # ChangeNotifier: change → apply instantly → persist
-├── l10n/
-│   └── app_strings.dart                   # String table for the four languages
+│   ├── note_repository.dart               # Abstract store
+│   ├── shared_prefs_note_repository.dart  # Persisted implementation
+│   ├── in_memory_note_repository.dart     # Test implementation
+│   ├── notebook_repository.dart           # Notebook hierarchy interface
+│   ├── shared_prefs_notebook_repository.dart  # Includes the one-off folders → sections migration
+│   ├── in_memory_notebook_repository.dart
+│   ├── settings_repository.dart           # (+ shared_prefs / in_memory implementations)
+├── settings/settings_controller.dart      # ChangeNotifier: apply instantly, then persist
+├── l10n/app_strings.dart                    # Four language tables behind typed getters
 ├── screens/
-│   ├── note_list_screen.dart              # List: search / filter / swipe to delete / new / settings
-│   ├── note_edit_screen.dart              # Edit: Markdown editing & preview / tags / folder / save
-│   └── settings_screen.dart               # Settings: language, colour, appearance (MD3)
-├── widgets/
-│   ├── note_tile.dart                     # One note in the list (with tag and folder badges)
-│   ├── filter_bar.dart                    # Folder / tag filter chips
-│   ├── folder_manager.dart                # Folder manager dialog (create / rename / delete)
-│   └── markdown_view.dart                 # Markdown view (GitHub Flavored)
-└── utils/
-    ├── date_format.dart                   # Minimal date formatting
-    └── markdown_plain.dart                # Markdown → plain text (list summary)
+│   ├── home_shell.dart                    # Three panes, tabs, autosave, trash, shortcuts
+│   └── settings_screen.dart               # Language / colour / theme mode
+├── utils/
+│   ├── markdown_plain.dart                # Markdown → plain preview text
+│   ├── markdown_tools.dart                # Toolbar edits + `[[wiki link]]` preprocessing
+│   └── date_format.dart                   # Locale-aware timestamps
+└── widgets/
+    ├── notebook_tree.dart                 # Scope list + notebook tree with context menu
+    ├── note_tile.dart                     # One row in the note list
+    ├── tab_strip.dart                     # Tab bar (dirty dot, close, context menu)
+    ├── note_editor.dart                   # Toolbar, fields, view modes, meta row
+    └── markdown_view.dart                 # GFM rendering with theme-derived styles
 ```
 
 ## Getting started
 
 ```bash
 flutter pub get
-flutter run          # pick a device and run
-flutter test         # model / repository / filter / i18n / Markdown / full UI flow
-flutter analyze      # static analysis
+flutter run -d windows          # or: chrome, android, macos, linux
+flutter build windows --release
 ```
 
-## Documentation languages
+Android / iOS / Web need nothing special. A Windows build needs symlink support:
+the project must live on an NTFS volume (exFAT and FAT32 cannot hold the plugin
+links under `windows/flutter/ephemeral/.plugin_symlinks`, which surfaces as
+`ERROR_INVALID_FUNCTION`), and Developer Mode must be enabled in Windows settings
+(or run the build from an elevated shell).
 
-The repository ships four identical READMEs:
+## Storage
 
-| File | Language |
-| --- | --- |
-| `README.md` | English (default entry) |
-| `README_ZH.md` | 简体中文 |
-| `README_ZH-TW.md` | 繁體中文 |
-| `README_JA.md` | 日本語 |
-| `README_JA-HIRA.md` | 日本語（ひらがな） |
-| `README_FR.md` | Français |
-| `README_RU.md` | Русский |
-
-Switch by clicking the language links at the top of the repo page, or by opening the file locally.
-The documentation language is **independent of the app UI language**, which is switched in **Settings → Language** inside the app.
-
-## Language and theme (in-app settings)
-
-Tap the gear icon in the list screen to open Settings — three groups of Material 3 controls:
-
-- **Language**: `RadioGroup` + `RadioListTile` for the four languages, applied on selection
-- **Theme colour**: 6 colour dots; tapping one swaps the seed colour used by `ColorScheme.fromSeed`
-- **Appearance**: `SegmentedButton` for system / light / dark
-
-Everything is written to `SharedPreferences` (key `argonote.settings.v1`) and restored on next launch.
-
-```dart
-// settings/settings_controller.dart
-Future<void> _apply(AppSettings next) async {
-  _settings = next;
-  notifyListeners();              // UI updates immediately
-  await _repository.save(next);   // then persist
-}
-```
-
-```dart
-// app.dart: MaterialApp wrapped in ListenableBuilder so the whole tree rebuilds on change
-return ListenableBuilder(
-  listenable: settingsController,
-  builder: (context, _) {
-    final settings = settingsController.settings;
-    return MaterialApp(
-      theme: _buildTheme(settings.seedColor, Brightness.light),
-      darkTheme: _buildTheme(settings.seedColor, Brightness.dark),
-      themeMode: settings.themeMode,
-      locale: settings.locale,
-      supportedLocales: AppLanguage.values.map((l) => l.locale).toList(),
-      localizationsDelegates: const [...],
-      home: NoteListScreen(...),
-    );
-  },
-);
-```
-
-## Markdown support
-
-A `SegmentedButton` at the top of the edit screen switches between “Edit” (Markdown source) and “Preview”.
-Rendering uses `flutter_markdown_plus` with the GitHub Flavored extension set, so headings, lists, task lists, fenced and inline code, links, tables, quotes and horizontal rules all render correctly:
-
-```dart
-// widgets/markdown_view.dart
-MarkdownBody(
-  data: data,
-  selectable: true,
-  extensionSet: md.ExtensionSet.gitHubFlavored,
-  styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
-    codeblockDecoration: BoxDecoration(
-      color: theme.colorScheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(8),
-    ),
-    tableBorder: TableBorder.all(color: theme.colorScheme.outlineVariant),
-    ...
-  ),
-);
-```
-
-The list does not render Markdown (too heavy) — `utils/markdown_plain.dart` strips the markup for the summary line:
-
-```dart
-Note.create(content: '# Title\n\n- first item').plainPreview;   // => 'Title first item'
-```
-
-## Tags and folders
-
-```dart
-class Note {
-  final List<String> tags;   // tags
-  final String? folderId;    // owning folder; null = unfiled
-}
-```
-
-- Edit screen bottom bar: a `PopupMenuButton` picks the folder (including “Unfiled” and “New folder”), tags are added/removed with `Chip` + `ActionChip`
-- List screen: `FilterBar` shows one horizontally scrolling row of `FilterChip`s for folders and one for tags; both combine with the keyword
-- The matching logic lives in `models/note_filter.dart` so it can be unit-tested on its own:
-
-```dart
-const filter = NoteFilter(folderId: 'folder-1', tag: 'work', keyword: 'weekly');
-final visible = notes.where(filter.matches).toList();
-```
-
-- Deleting a folder only detaches notes — notes are never deleted and show up as “Unfiled”
-
-## Key code walkthrough
-
-### 1. Model: structure only, no storage
-
-`lib/models/note.dart` is pure Dart with no Flutter imports, so tests can construct and assert freely.
-
-```dart
-class Note {
-  final String id;
-  final String title;
-  final String content;
-  final DateTime createdAt;
-  final DateTime updatedAt;   // list is sorted by this, descending
-  final List<String> tags;
-  final String? folderId;
-
-  String get displayTitle => title.trim().isEmpty ? '无标题' : title.trim();
-  String get plainPreview => plainTextFromMarkdown(content);
-  bool get isBlank => title.trim().isEmpty && content.trim().isEmpty && tags.isEmpty && folderId == null;
-
-  factory Note.create({String title = '', String content = '', List<String> tags = const [], String? folderId});
-  Map<String, dynamic> toJson();
-  factory Note.fromJson(Map<String, dynamic> json);   // tolerant of missing / dirty data
-}
-```
-
-Two details worth noting:
-
-- `displayTitle` normalises empty titles, so the UI never has to null-check.
-- `fromJson` uses `DateTime.tryParse` with fallbacks: **one corrupt record cannot break the whole list**, and data written before `tags` / `folderId` existed still loads fine.
-
-### 2. Repository abstraction: the UI never touches storage
-
-```dart
-abstract class NoteRepository {
-  Future<List<Note>> all();                    // by update time, descending
-  Future<Note?> findById(String id);
-  Future<Note> create({required String title, required String content,
-                       List<String> tags = const [], String? folderId});
-  Future<Note> update({required String id, required String title, required String content,
-                       required List<String> tags, String? folderId});
-  Future<void> delete(String id);
-  Future<void> restore(Note note);             // used by undo
-}
-```
-
-`FolderRepository` and `SettingsRepository` follow the same shape. Two benefits: swapping storage (SQLite / Isar / cloud) needs no UI change, and tests simply inject the in-memory implementations without mocking platform channels.
-
-### 3. Persistence: one JSON document
-
-`shared_prefs_note_repository.dart` serialises the whole list into a single key:
-
-```dart
-static const String storageKey = 'argonote.notes.v1';
-
-Future<void> _writeAll(List<Note> notes) async {
-  _sortByUpdatedAtDesc(notes);
-  await _prefs.setString(storageKey, jsonEncode(notes.map((n) => n.toJson()).toList()));
-}
-```
-
-The key carries a `v1` version so future migrations are possible. Sorting happens on write, so reads stay cheap.
-
-Storage keys:
-
-| Key | Contents |
-| --- | --- |
-| `argonote.notes.v1` | All notes |
-| `argonote.folders.v1` | All folders |
-| `argonote.settings.v1` | Language / seed colour / theme mode |
-
-> Why not a database: for a notebook with a few hundred low-frequency writes, a single document is simpler and easier to debug. When the data grows, swap in sqflite / isar behind the same interface.
-
-### 4. Dependency injection: switch implementations in one line
-
-```dart
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();       // needed before awaiting platform channels
-  final prefs = await SharedPreferences.getInstance();
-
-  final settingsController = SettingsController(SharedPrefsSettingsRepository(prefs));
-  await settingsController.load();                 // restore language / colour before first frame
-
-  runApp(ArgonoteApp(
-    repository: SharedPrefsNoteRepository(prefs),
-    folderRepository: SharedPrefsFolderRepository(prefs),
-    settingsController: settingsController,
-  ));
-}
-```
-
-### 5. List screen: search, filters, swipe to delete
-
-`note_list_screen.dart` sticks to plain `StatefulWidget + setState`:
-
-```dart
-List<Note> get _visibleNotes => _notes.where(_filter.matches).toList(growable: false);
-```
-
-Deletion uses `Dismissible`: `confirmDismiss` asks for confirmation, `onDismissed` actually removes the note from storage.
-A SnackBar then offers “Undo”, which calls `restore(note)` and writes the **original record** back — not a fresh copy — so id and creation time survive.
-
-```dart
-Dismissible(
-  key: ValueKey<String>(note.id),
-  direction: DismissDirection.endToStart,
-  confirmDismiss: (_) => _confirmDelete(note),
-  onDismissed: (_) { _deleteNote(note); },
-  child: NoteTile(note: note, onTap: () => _openEditor(note)),
-)
-```
-
-### 6. Edit screen: save on back, bigger save button
-
-All saving goes through one method (tags and folder included):
-
-```dart
-Future<void> _save() async {
-  final isBlank = title.trim().isEmpty && content.trim().isEmpty && _tags.isEmpty && _folderId == null;
-  if (isBlank) {
-    if (existing != null) await widget.repository.delete(existing.id);   // cleared = deleted
-  } else if (existing == null) {
-    await widget.repository.create(title: title, content: content, tags: _tags, folderId: _folderId);
-  } else {
-    await widget.repository.update(id: existing.id, title: title, content: content,
-                                   tags: _tags, folderId: _folderId);
-  }
-}
-```
-
-Auto-save on back is handled by `PopScope`:
-
-```dart
-PopScope<Object?>(
-  canPop: false,
-  onPopInvokedWithResult: (didPop, result) {
-    if (didPop) return;
-    _saveAndPop();          // save first, then leave
-  },
-  child: Scaffold(...),
-)
-```
-
-The save button is deliberately larger and more prominent than a plain `TextButton` (min 112×48, 17px bold, check icon) while staying a regular MD3 filled button aligned with the rest of the AppBar:
-
-```dart
-FilledButton.icon(
-  onPressed: _saveAndPop,
-  icon: const Icon(Icons.check_rounded, size: 22),
-  label: Text(strings.save),
-  style: FilledButton.styleFrom(
-    minimumSize: const Size(112, 48),
-    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-    textStyle: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-  ),
-)
-```
-
-### 7. Localisation: one table, typed getters
-
-`l10n/app_strings.dart` uses a “key → text” map with typed getters, no code generation:
-
-```dart
-class AppStrings {
-  static AppStrings of(BuildContext context) => forLocale(Localizations.localeOf(context));
-  String get newNote => text('newNote');
-  String deleteMessage(String title) => text('deleteMessage').replaceAll('{title}', title);
-}
-```
-
-All four languages share one key set (a unit test asserts every key exists in every language, so nothing can be left untranslated). Unknown locales fall back to English.
-
-### 8. Tests
+One JSON document per entity, all under a single preference key each:
 
 ```
-test/models/note_test.dart                      # model serialisation, tags/folder, Markdown summary
-test/models/note_filter_test.dart               # keyword / tag / folder filter combinations
-test/models/app_settings_test.dart              # settings serialisation, completeness of all locales
-test/data/in_memory_note_repository_test.dart   # note CRUD + undo restore
-test/data/in_memory_folder_repository_test.dart # folder CRUD
-test/utils/markdown_test.dart                   # Markdown → plain text + GFM parsing (incl. tables)
-test/widgets/note_flow_test.dart                # full create-edit-delete flow, search, tag/folder filters,
-                                                # Markdown preview tab, language switch from Settings
+argonote.notes.v1          # every note, including trashed ones
+argonote.notebookTree.v1   # notebooks, section groups, sections
+argonote.settings.v1       # language, accent colour, theme mode
+argonote.folders.v1        # legacy: read once at startup, then superseded
 ```
+
+Reading a note still accepts `folderId` as `sectionId`, so an older file loads
+unchanged. Writes always use the new field.
+
+## Tests
+
+```bash
+flutter test                      # widget + unit tests
+dart run tool/selfcheck.dart      # 80 assertions on the pure-Dart layer, exit code = result
+```
+
+```
+test/models/note_test.dart                     # grapheme safety, JSON, sentinels
+test/models/note_filter_test.dart              # scopes, sorting, keyword/tag matching
+test/models/app_settings_test.dart             # settings round-trip
+test/l10n/app_strings_test.dart                # all four bundles carry the same keys
+test/data/in_memory_note_repository_test.dart  # CRUD, pin, soft delete, unassign
+test/data/in_memory_notebook_repository_test.dart
+test/data/shared_prefs_notebook_repository_test.dart  # folders → sections migration
+test/utils/markdown_test.dart                  # Markdown → plain text, GFM tables
+test/utils/markdown_tools_test.dart            # toolbar edits, wiki-link preprocessing
+test/widgets/note_flow_test.dart               # three-pane flow, tabs, autosave, trash,
+                                               # wiki-link preview, shortcuts, language switch
+```
+
+`tool/selfcheck.dart` exists because the models, filters, text tools and in-memory
+repositories are pure Dart: on a machine where `flutter test` cannot start (some
+firewalls block the loopback socket the test runner needs, failing with
+"Connection closed before test suite loaded"), the logic layer can still be
+verified by the plain Dart VM.
+
+### Runtime harness `tool/runtime_harness.dart`
+
+Logic tests do not prove the UI paints. `flutter test` needs the loopback VM
+service and `flutter build windows` needs symlink privileges, while `flutter_tester`
+needs neither — so the harness boots the real `ArgonoteApp` (in-memory repositories
+plus seed data containing CJK punctuation, emoji, ZWJ sequences, a code block, a
+GFM table and wiki links) inside `flutter_tester`, drives it with synthesised
+pointer events, asserts on the text that is actually on screen at each step, and
+writes each state to a PNG through `RepaintBoundary.toImage`.
+
+```bash
+flutter build bundle -t tool/runtime_harness.dart      # compile only
+
+"$SDK/bin/cache/artifacts/engine/windows-x64/flutter_tester.exe" \
+  --non-interactive --enable-software-rendering \
+  --flutter-assets-dir=build/flutter_assets \
+  --packages=.dart_tool/package_config.json \
+  --icu-data-file-path="$SDK/bin/cache/artifacts/engine/windows-x64/icudtl.dat" \
+  build/flutter_assets/kernel_blob.bin
+```
+
+- `ARGONOTE_SHOT_DIR` sets the screenshot directory (default `D:/tmp/runtime`).
+- Exit code 0 means every assertion passed; failures print one `FAIL …` line each,
+  followed by `DONE failures=N`.
+- `10_zoom.png` is rendered at a 6× pixel ratio to inspect glyph coverage.
+- `ARGONOTE_WIDE=1` runs the desktop three-pane branch. The tester window is a fixed
+  800×600 logical pixels, below `HomeShell._wideBreakpoint` (920), so the harness
+  overrides `MediaQuery` and `RenderView.configuration` to get a 1440×900 root view.
+  Input still goes through the real pipelines (`PlatformDispatcher.onKeyData` with
+  `synthesized: true` for `ui.KeyData`), which is what lets this run cover
+  `Ctrl+N` / `Ctrl+Tab` / `Ctrl+W`.
+- Do not switch it to `TestWidgetsFlutterBinding`: `LiveTestWidgetsFlutterBinding`
+  takes over pointer dispatch and the synthesised taps stop landing.
+- Afterwards rebuild from the normal entry point (`flutter build bundle`) so
+  `build/flutter_assets` does not keep the harness kernel.
 
 ## Known issues
 
-- On Windows desktop Flutter creates directory symlinks for plugins
-  (`windows/flutter/ephemeral/.plugin_symlinks`); `ERROR_INVALID_FUNCTION` means you need
-  Developer Mode or an elevated shell. Android / iOS / Web are unaffected.
-- Tapping a link in the Markdown preview shows the URL in a SnackBar (`url_launcher` is not included, so the app never opens external links on its own).
+- Clicking an `http(s)` link in the preview only reports the target in a snack bar —
+  `url_launcher` is deliberately not a dependency. `[[wiki links]]` do navigate, by title.
+- Titles are matched case-insensitively for wiki links; duplicate titles resolve to the
+  most recently updated note.
+- Storage is a single preference document per entity, which is fine for personal notes but
+  reloads everything on every write; large libraries would want a real database.
+- Windows ships no regional-indicator glyphs in Segoe UI Emoji, so flag emoji render as
+  their two letter codes (a China flag shows as `CN`) on Windows desktop; macOS and
+  Android are fine. That is a missing system font, not a rendering bug — showing flags
+  would mean bundling a font. Family and profession ZWJ sequences do compose correctly,
+  confirmed glyph by glyph in the runtime screenshots.

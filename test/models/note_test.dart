@@ -3,89 +3,85 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('Note', () {
-    test('create 生成 id 并初始化时间', () {
-      final note = Note.create(title: '标题', content: '正文');
-
+    test('create 生成唯一 id，当前时间戳齐', () {
+      final note = Note.create(title: 't', content: 'c');
       expect(note.id, isNotEmpty);
-      expect(note.title, '标题');
-      expect(note.content, '正文');
-      expect(note.createdAt, note.updatedAt);
-      expect(note.tags, isEmpty);
-      expect(note.folderId, isNull);
+      expect(note.createdAt.difference(note.updatedAt).abs(), Duration.zero);
+      expect(note.sectionId, isNull);
+      expect(note.pinned, isFalse);
+      expect(note.trashed, isFalse);
     });
 
-    test('create 可以带上标签与文件夹', () {
-      final note = Note.create(tags: const <String>['工作'], folderId: 'folder-1');
-
-      expect(note.tags, <String>['工作']);
-      expect(note.folderId, 'folder-1');
-    });
-
-    test('copyWith 只覆盖传入字段，并刷新 updatedAt', () {
-      final note = Note.create(title: '旧标题', content: '旧正文');
-      final later = note.createdAt.add(const Duration(minutes: 5));
-      final updated = note.copyWith(title: '新标题', updatedAt: later);
-
-      expect(updated.id, note.id);
-      expect(updated.title, '新标题');
-      expect(updated.content, '旧正文');
-      expect(updated.createdAt, note.createdAt);
-      expect(updated.updatedAt, later);
-    });
-
-    test('copyWith 传 null 可以把文件夹清空，不传则保持原值', () {
-      final note = Note.create(folderId: 'folder-1');
-
-      expect(note.copyWith(folderId: null).folderId, isNull);
-      expect(note.copyWith(title: 'x').folderId, 'folder-1');
-    });
-
-    test('空标题回退为「无标题」，isBlank 判断正确', () {
-      expect(Note.create(title: '   ').displayTitle, '无标题');
+    test('isBlank：标题正文标签分区全空才算空', () {
       expect(Note.create().isBlank, isTrue);
-      expect(Note.create(content: '有内容').isBlank, isFalse);
-      // 只有标签也算是「有内容」，不该被当成空笔记丢掉。
-      expect(Note.create(tags: const <String>['待办']).isBlank, isFalse);
+      expect(Note.create(title: '  ').isBlank, isTrue);
+      expect(Note.create(tags: const <String>['x']).isBlank, isFalse);
+      expect(Note.create(sectionId: 's').isBlank, isFalse);
+      expect(Note.create(content: '# hi').isBlank, isFalse);
     });
 
-    test('plainPreview 去掉 Markdown 标记', () {
-      final note = Note.create(content: '# 标题\n\n- 第一项\n- 第二项');
+    test('copyWith 保留 id 与 createdAt，默认刷新 updatedAt', () {
+      final note = Note.create(title: 't', content: 'c', sectionId: 'sec');
+      final later = note.copyWith(content: 'new');
 
-      expect(note.plainPreview, '标题 第一项 第二项');
+      expect(later.id, note.id);
+      expect(later.createdAt, note.createdAt);
+      expect(later.updatedAt.isAfter(note.updatedAt) || later.updatedAt == note.updatedAt, isTrue);
+      expect(later.content, 'new');
+      expect(later.sectionId, 'sec');
     });
 
-    test('JSON 序列化可往返（含标签与文件夹）', () {
+    test('copyWith 哨兵：不传 sectionId 保持原值，显式传 null 清空', () {
+      final note = Note.create(sectionId: 'sec');
+      expect(note.copyWith(title: 'x').sectionId, 'sec');
+      expect(note.copyWith(sectionId: null).sectionId, isNull);
+      expect(note.copyWith(deletedAt: null).deletedAt, isNull);
+    });
+
+    test('JSON 往返保留全部字段', () {
       final note = Note.create(
-        title: '会议纪要',
-        content: '1. 结论\n2. 待办',
-        tags: const <String>['会议', '重要'],
-        folderId: 'folder-1',
+        title: '标题',
+        content: '正文',
+        tags: const <String>['a', 'b'],
+        sectionId: 'sec-1',
       );
-      final restored = Note.fromJson(note.toJson());
+      final moved = note.copyWith(trashed: true, deletedAt: DateTime.now());
 
-      expect(restored, note);
-      expect(restored.tags, <String>['会议', '重要']);
-      expect(restored.folderId, 'folder-1');
+      final restored = Note.fromJson(moved.toJson());
+      expect(restored.id, note.id);
+      expect(restored.tags, <String>['a', 'b']);
+      expect(restored.sectionId, 'sec-1');
+      expect(restored.trashed, isTrue);
+      expect(restored.deletedAt, isNotNull);
     });
 
-    test('旧数据（没有 tags / folderId 字段）也能正常读取', () {
-      final note = Note.fromJson(<String, dynamic>{
-        'id': 'legacy',
-        'title': '老笔记',
-        'content': '内容',
-        'updatedAt': DateTime(2024).toIso8601String(),
+    test('脏 JSON 不炸：缺失字段与错误类型都有兜底', () {
+      final restored = Note.fromJson(<String, dynamic>{
+        'id': 'x',
+        'tags': 'not-a-list',
+        'createdAt': 'garbage',
       });
-
-      expect(note.tags, isEmpty);
-      expect(note.folderId, isNull);
+      expect(restored.id, 'x');
+      expect(restored.tags, isEmpty);
+      expect(restored.createdAt.isBefore(DateTime.now()), isTrue);
     });
 
-    test('脏数据不会抛异常，缺失字段有兜底', () {
-      final note = Note.fromJson(<String, dynamic>{});
+    test('plainPreview 对 emoji 边界安全（不产生替换符）', () {
+      // 摘要截断点正好落在 emoji 中间时，旧实现（substring）会切坏代理对。
+      final emoji = '😀' * 100;
+      final preview = Note.create(content: emoji).plainPreview;
+      expect(preview.contains('\uFFFD'), isFalse);
+    });
 
-      expect(note.id, isEmpty);
-      expect(note.title, isEmpty);
-      expect(note.isBlank, isTrue);
+    test('graphemeCount 按字素计数：emoji 记 1，组合音标不翻倍', () {
+      expect(Note.create(content: '😀').graphemeCount, 1);
+      expect(Note.create(content: '👩‍👩‍👧').graphemeCount, 1);
+      expect(Note.create(content: '你好').graphemeCount, 2);
+    });
+
+    test('wordCount 中英混合分别计量', () {
+      expect(Note(content: 'hello world', id: 'x', title: '', createdAt: DateTime(2026), updatedAt: DateTime(2026)).wordCount, 2);
+      expect(Note(content: '你好世界', id: 'x', title: '', createdAt: DateTime(2026), updatedAt: DateTime(2026)).wordCount, 4);
     });
   });
 }

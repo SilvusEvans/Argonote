@@ -33,7 +33,16 @@ class MarkdownView extends StatelessWidget {
       codeblockPadding: const EdgeInsets.all(12),
       code: (base.code ?? const TextStyle()).copyWith(
         backgroundColor: Colors.transparent,
-        fontFamily: 'monospace',
+        // 'monospace' 是 Android 的逻辑字体名，Windows 上根本解析不到；
+        // 命中不到字形时中文和 emoji 就先落到没有对应字形的字体上，
+        // 表现为代码块/行内代码里「有时字符显示成方块」。这里换成真实字体
+        // 并给出中文、emoji 的回退链。
+        fontFamily: 'Consolas',
+        fontFamilyFallback: const <String>[
+          'Cascadia Mono',
+          'Microsoft YaHei UI',
+          'Segoe UI Emoji',
+        ],
       ),
       blockquoteDecoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),

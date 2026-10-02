@@ -1,3 +1,5 @@
+import 'package:characters/characters.dart';
+
 /// 把 Markdown 粗略还原成纯文本，用于列表页的摘要行。
 ///
 /// 只做展示用的「去标记」，不追求 100% 精确：
@@ -42,6 +44,12 @@ String plainTextFromMarkdown(String source, {int maxLength = 80}) {
   // 折叠空白。
   text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
 
-  if (text.length <= maxLength) return text;
-  return '${text.substring(0, maxLength)}…';
+  // 按「用户感知字符」（grapheme cluster）截断。
+  //
+  // 不能用 String.substring：它按 UTF-16 code unit 切，
+  // emoji（如 😀 = 2 个 code unit）落在边界上时会被切成半个代理对，
+  // 生成无效字符串，渲染成替换符 � —— 这就是摘要行偶发乱码的根因。
+  final chars = text.characters;
+  if (chars.length <= maxLength) return text;
+  return '${chars.take(maxLength)}…';
 }

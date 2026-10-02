@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
-import 'data/shared_prefs_folder_repository.dart';
 import 'data/shared_prefs_note_repository.dart';
+import 'data/shared_prefs_notebook_repository.dart';
 import 'data/shared_prefs_settings_repository.dart';
 import 'settings/settings_controller.dart';
 
@@ -15,7 +15,8 @@ Future<void> main() async {
   final prefs = await SharedPreferences.getInstance();
 
   final noteRepository = SharedPrefsNoteRepository(prefs);
-  final folderRepository = SharedPrefsFolderRepository(prefs);
+  // 笔记本树首次读取时会把旧版文件夹数据迁移成分区。
+  final notebookRepository = SharedPrefsNotebookRepository(prefs);
 
   final settingsController = SettingsController(SharedPrefsSettingsRepository(prefs));
   // 先恢复上次的语言 / 配色，再渲染，避免启动瞬间闪一下默认主题。
@@ -23,8 +24,8 @@ Future<void> main() async {
 
   runApp(
     ArgonoteApp(
-      repository: noteRepository,
-      folderRepository: folderRepository,
+      noteRepository: noteRepository,
+      notebookRepository: notebookRepository,
       settingsController: settingsController,
     ),
   );

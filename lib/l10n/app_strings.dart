@@ -1,8 +1,6 @@
 import 'package:flutter/widgets.dart';
 
 /// 应用支持的界面语言。
-///
-/// 只保留代码里真正需要的两件事：语言代码（用于 Locale）和展示名（用于设置页）。
 enum AppLanguage {
   simplifiedChinese('zh_CN', '简体中文'),
   english('en', 'English'),
@@ -39,9 +37,6 @@ enum AppLanguage {
 }
 
 /// 极简多语言方案：一张 key → 文案 的表 + 一组类型安全的 getter。
-///
-/// 没有引入 flutter_gen / intl，避免额外的代码生成步骤；
-/// 通过 [AppStrings.of] 从当前 [Locale] 取文案，语言切换后整棵 Widget 树自动重建。
 class AppStrings {
   const AppStrings._(Map<String, String> values) : _values = values;
 
@@ -85,6 +80,9 @@ class AppStrings {
   String get confirm => text('confirm');
   String get undo => text('undo');
   String get settings => text('settings');
+  String get rename => text('rename');
+  String get close => text('close');
+  String get untitled => text('untitled');
 
   // ---- 列表页 ----
   String get newNote => text('newNote');
@@ -94,14 +92,50 @@ class AppStrings {
   String get noMatchTitle => text('noMatchTitle');
   String get noMatchSubtitle => text('noMatchSubtitle');
   String get deleteTitle => text('deleteTitle');
-  String get filterAll => text('filterAll');
-  String get folderSection => text('folderSection');
   String get tagSection => text('tagSection');
-  String get folderNone => text('folderNone');
   String get tagNone => text('tagNone');
+  String get sortBy => text('sortBy');
+  String get sortUpdated => text('sortUpdated');
+  String get sortCreated => text('sortCreated');
+  String get sortTitle => text('sortTitle');
 
   String deleteMessage(String title) => text('deleteMessage').replaceAll('{title}', title);
   String deletedMessage(String title) => text('deletedMessage').replaceAll('{title}', title);
+
+  // ---- 笔记树（OneNote 体系） ----
+  String get allNotes => text('allNotes');
+  String get pinnedScope => text('pinnedScope');
+  String get trash => text('trash');
+  String get unfiled => text('unfiled');
+  String get notebookLabel => text('notebookLabel');
+  String get sectionLabel => text('sectionLabel');
+  String get groupLabel => text('groupLabel');
+  String get newNotebook => text('newNotebook');
+  String get notebookNameHint => text('notebookNameHint');
+  String get newSection => text('newSection');
+  String get sectionNameHint => text('sectionNameHint');
+  String get newSectionGroup => text('newSectionGroup');
+  String get groupNameHint => text('groupNameHint');
+  String get deleteNotebookTitle => text('deleteNotebookTitle');
+  String get deleteNotebookMessage => text('deleteNotebookMessage');
+  String get deleteSectionTitle => text('deleteSectionTitle');
+  String get deleteSectionMessage => text('deleteSectionMessage');
+  String get deleteGroupTitle => text('deleteGroupTitle');
+  String get deleteGroupMessage => text('deleteGroupMessage');
+
+  // ---- 回收站 / 置顶 ----
+  String get pin => text('pin');
+  String get unpin => text('unpin');
+  String get restore => text('restore');
+  String get deleteForever => text('deleteForever');
+  String get emptyTrash => text('emptyTrash');
+  String get emptyTrashConfirm => text('emptyTrashConfirm');
+  String get trashEmpty => text('trashEmpty');
+
+  // ---- 标签页 ----
+  String get tabCloseOthers => text('tabCloseOthers');
+  String get tabCloseAll => text('tabCloseAll');
+  String get saved => text('saved');
 
   // ---- 编辑页 ----
   String get createTitle => text('createTitle');
@@ -110,20 +144,34 @@ class AppStrings {
   String get contentHint => text('contentHint');
   String get editTab => text('editTab');
   String get previewTab => text('previewTab');
+  String get splitTab => text('splitTab');
   String get previewEmpty => text('previewEmpty');
   String get linkCopiedHint => text('linkCopiedHint');
+  String get wikiLinkNotFound => text('wikiLinkNotFound');
+  String get copyMarkdown => text('copyMarkdown');
+  String get copiedToClipboard => text('copiedToClipboard');
+  String get statsChars => text('statsChars');
+  String get statsWords => text('statsWords');
+  String get statsLines => text('statsLines');
 
-  // ---- 标签 / 文件夹 ----
+  // ---- 工具栏 ----
+  String get tbBold => text('tbBold');
+  String get tbItalic => text('tbItalic');
+  String get tbHeading => text('tbHeading');
+  String get tbList => text('tbList');
+  String get tbChecklist => text('tbChecklist');
+  String get tbCode => text('tbCode');
+  String get tbQuote => text('tbQuote');
+  String get tbLink => text('tbLink');
+  String get tbTable => text('tbTable');
+  String get tbDivider => text('tbDivider');
+
+  // ---- 标签 / 分区归属 ----
   String get tagsLabel => text('tagsLabel');
   String get addTag => text('addTag');
   String get tagNameHint => text('tagNameHint');
   String get removeTag => text('removeTag');
-  String get folderLabel => text('folderLabel');
-  String get newFolder => text('newFolder');
-  String get folderNameHint => text('folderNameHint');
-  String get deleteFolderTitle => text('deleteFolderTitle');
-  String get deleteFolderMessage => text('deleteFolderMessage');
-  String get folderCreatedMessage => text('folderCreatedMessage');
+  String get sectionOfNote => text('sectionOfNote');
 
   // ---- 设置页 ----
   String get settingsTitle => text('settingsTitle');
@@ -146,38 +194,83 @@ class AppStrings {
     'confirm': '确定',
     'undo': '撤销',
     'settings': '设置',
+    'rename': '重命名',
+    'close': '关闭',
+    'untitled': '无标题',
     'newNote': '写笔记',
     'searchHint': '搜索标题或内容',
     'emptyTitle': '还没有笔记',
-    'emptySubtitle': '点击右下角「写笔记」开始第一条',
+    'emptySubtitle': '点上方「写笔记」开始第一条',
     'noMatchTitle': '没有匹配的笔记',
     'noMatchSubtitle': '换个关键词试试',
     'deleteTitle': '删除笔记',
     'deleteMessage': '确定删除「{title}」吗？',
     'deletedMessage': '已删除「{title}」',
-    'filterAll': '全部',
-    'folderSection': '文件夹',
     'tagSection': '标签',
-    'folderNone': '未归类',
     'tagNone': '无标签',
+    'sortBy': '排序',
+    'sortUpdated': '最近修改',
+    'sortCreated': '最近创建',
+    'sortTitle': '标题',
+    'allNotes': '所有笔记',
+    'pinnedScope': '置顶',
+    'trash': '回收站',
+    'unfiled': '未分组',
+    'notebookLabel': '笔记本',
+    'sectionLabel': '分区',
+    'groupLabel': '分区组',
+    'newNotebook': '新建笔记本',
+    'notebookNameHint': '笔记本名称',
+    'newSection': '新建分区',
+    'sectionNameHint': '分区名称',
+    'newSectionGroup': '新建分区组',
+    'groupNameHint': '分区组名称',
+    'deleteNotebookTitle': '删除笔记本',
+    'deleteNotebookMessage': '删除后，其中的分区和分区组会一并删除，笔记移入「未分组」。笔记本身不会丢失。',
+    'deleteSectionTitle': '删除分区',
+    'deleteSectionMessage': '删除后，该分区下的笔记会变为「未分组」，笔记本身不会丢失。',
+    'deleteGroupTitle': '删除分区组',
+    'deleteGroupMessage': '组内的分区会提升到笔记本下，不会被删除。',
+    'pin': '置顶',
+    'unpin': '取消置顶',
+    'restore': '还原',
+    'deleteForever': '彻底删除',
+    'emptyTrash': '清空回收站',
+    'emptyTrashConfirm': '回收站里的笔记将被永久删除，无法恢复。确定继续吗？',
+    'trashEmpty': '回收站是空的',
+    'tabCloseOthers': '关闭其它标签',
+    'tabCloseAll': '关闭全部标签',
+    'saved': '已保存',
     'createTitle': '新建笔记',
     'editTitle': '编辑笔记',
     'titleHint': '标题',
-    'contentHint': '写点什么…（支持 Markdown）',
+    'contentHint': '写点什么…（支持 Markdown 与 [[双链]]）',
     'editTab': '编辑',
     'previewTab': '预览',
+    'splitTab': '分栏',
     'previewEmpty': '还没有内容可预览',
     'linkCopiedHint': '链接：',
+    'wikiLinkNotFound': '没有找到同名笔记',
+    'copyMarkdown': '复制为 Markdown',
+    'copiedToClipboard': '已复制到剪贴板',
+    'statsChars': '字符',
+    'statsWords': '字数',
+    'statsLines': '行数',
+    'tbBold': '加粗',
+    'tbItalic': '斜体',
+    'tbHeading': '标题',
+    'tbList': '列表',
+    'tbChecklist': '任务列表',
+    'tbCode': '代码',
+    'tbQuote': '引用',
+    'tbLink': '链接',
+    'tbTable': '表格',
+    'tbDivider': '分割线',
     'tagsLabel': '标签',
     'addTag': '添加标签',
     'tagNameHint': '标签名称',
     'removeTag': '移除标签',
-    'folderLabel': '文件夹',
-    'newFolder': '新建文件夹',
-    'folderNameHint': '文件夹名称',
-    'deleteFolderTitle': '删除文件夹',
-    'deleteFolderMessage': '删除后，该文件夹下的笔记会变为「未归类」，笔记本身不会丢失。',
-    'folderCreatedMessage': '已创建文件夹',
+    'sectionOfNote': '分区',
     'settingsTitle': '设置',
     'languageSection': '界面语言',
     'languageSubtitle': '切换后立即生效，并会记住你的选择',
@@ -199,38 +292,83 @@ class AppStrings {
     'confirm': 'OK',
     'undo': 'Undo',
     'settings': 'Settings',
+    'rename': 'Rename',
+    'close': 'Close',
+    'untitled': 'Untitled',
     'newNote': 'New note',
     'searchHint': 'Search title or content',
     'emptyTitle': 'No notes yet',
-    'emptySubtitle': 'Tap “New note” to write your first one',
+    'emptySubtitle': 'Tap “New note” above to write your first one',
     'noMatchTitle': 'No matching notes',
     'noMatchSubtitle': 'Try a different keyword',
     'deleteTitle': 'Delete note',
     'deleteMessage': 'Delete “{title}”?',
     'deletedMessage': 'Deleted “{title}”',
-    'filterAll': 'All',
-    'folderSection': 'Folders',
     'tagSection': 'Tags',
-    'folderNone': 'Unfiled',
     'tagNone': 'Untagged',
+    'sortBy': 'Sort',
+    'sortUpdated': 'Recently edited',
+    'sortCreated': 'Recently created',
+    'sortTitle': 'Title',
+    'allNotes': 'All notes',
+    'pinnedScope': 'Pinned',
+    'trash': 'Trash',
+    'unfiled': 'Unfiled',
+    'notebookLabel': 'Notebook',
+    'sectionLabel': 'Section',
+    'groupLabel': 'Section group',
+    'newNotebook': 'New notebook',
+    'notebookNameHint': 'Notebook name',
+    'newSection': 'New section',
+    'sectionNameHint': 'Section name',
+    'newSectionGroup': 'New section group',
+    'groupNameHint': 'Section group name',
+    'deleteNotebookTitle': 'Delete notebook',
+    'deleteNotebookMessage': 'Its sections and groups will be removed; notes become “Unfiled”. Notes are kept.',
+    'deleteSectionTitle': 'Delete section',
+    'deleteSectionMessage': 'Notes inside will become “Unfiled”. Notes themselves are kept.',
+    'deleteGroupTitle': 'Delete section group',
+    'deleteGroupMessage': 'Sections inside move up to the notebook. They are not deleted.',
+    'pin': 'Pin',
+    'unpin': 'Unpin',
+    'restore': 'Restore',
+    'deleteForever': 'Delete forever',
+    'emptyTrash': 'Empty trash',
+    'emptyTrashConfirm': 'Notes in the trash will be permanently removed. Continue?',
+    'trashEmpty': 'Trash is empty',
+    'tabCloseOthers': 'Close other tabs',
+    'tabCloseAll': 'Close all tabs',
+    'saved': 'Saved',
     'createTitle': 'New note',
     'editTitle': 'Edit note',
     'titleHint': 'Title',
-    'contentHint': 'Write something… (Markdown supported)',
+    'contentHint': 'Write something… (Markdown & [[wiki links]] supported)',
     'editTab': 'Edit',
     'previewTab': 'Preview',
+    'splitTab': 'Split',
     'previewEmpty': 'Nothing to preview yet',
     'linkCopiedHint': 'Link: ',
+    'wikiLinkNotFound': 'No note with that title',
+    'copyMarkdown': 'Copy as Markdown',
+    'copiedToClipboard': 'Copied to clipboard',
+    'statsChars': 'chars',
+    'statsWords': 'words',
+    'statsLines': 'lines',
+    'tbBold': 'Bold',
+    'tbItalic': 'Italic',
+    'tbHeading': 'Heading',
+    'tbList': 'List',
+    'tbChecklist': 'Task list',
+    'tbCode': 'Code',
+    'tbQuote': 'Quote',
+    'tbLink': 'Link',
+    'tbTable': 'Table',
+    'tbDivider': 'Divider',
     'tagsLabel': 'Tags',
     'addTag': 'Add tag',
     'tagNameHint': 'Tag name',
     'removeTag': 'Remove tag',
-    'folderLabel': 'Folder',
-    'newFolder': 'New folder',
-    'folderNameHint': 'Folder name',
-    'deleteFolderTitle': 'Delete folder',
-    'deleteFolderMessage': 'Notes inside will become “Unfiled”. Notes themselves are kept.',
-    'folderCreatedMessage': 'Folder created',
+    'sectionOfNote': 'Section',
     'settingsTitle': 'Settings',
     'languageSection': 'Language',
     'languageSubtitle': 'Applies instantly and is remembered',
@@ -252,38 +390,83 @@ class AppStrings {
     'confirm': 'OK',
     'undo': '元に戻す',
     'settings': '設定',
+    'rename': '名前を変更',
+    'close': '閉じる',
+    'untitled': '無題',
     'newNote': '新規メモ',
     'searchHint': 'タイトルまたは本文を検索',
     'emptyTitle': 'メモがありません',
-    'emptySubtitle': '右下の「新規メモ」から始めましょう',
+    'emptySubtitle': '上の「新規メモ」から始めましょう',
     'noMatchTitle': '一致するメモがありません',
     'noMatchSubtitle': '別のキーワードで試してください',
     'deleteTitle': 'メモを削除',
     'deleteMessage': '「{title}」を削除しますか？',
     'deletedMessage': '「{title}」を削除しました',
-    'filterAll': 'すべて',
-    'folderSection': 'フォルダ',
     'tagSection': 'タグ',
-    'folderNone': '未分類',
     'tagNone': 'タグなし',
+    'sortBy': '並び替え',
+    'sortUpdated': '更新順',
+    'sortCreated': '作成順',
+    'sortTitle': 'タイトル',
+    'allNotes': 'すべてのメモ',
+    'pinnedScope': 'ピン留め',
+    'trash': 'ごみ箱',
+    'unfiled': '未分類',
+    'notebookLabel': 'ノートブック',
+    'sectionLabel': 'セクション',
+    'groupLabel': 'セクショングループ',
+    'newNotebook': '新しいノートブック',
+    'notebookNameHint': 'ノートブック名',
+    'newSection': '新しいセクション',
+    'sectionNameHint': 'セクション名',
+    'newSectionGroup': '新しいセクショングループ',
+    'groupNameHint': 'セクショングループ名',
+    'deleteNotebookTitle': 'ノートブックを削除',
+    'deleteNotebookMessage': '内のセクションとグループも削除され、メモは「未分類」になります。メモ自体は残ります。',
+    'deleteSectionTitle': 'セクションを削除',
+    'deleteSectionMessage': 'セクション内のメモは「未分類」になります。メモ自体は削除されません。',
+    'deleteGroupTitle': 'セクショングループを削除',
+    'deleteGroupMessage': 'グループ内のセクションはノートブック直下に移動します。削除されません。',
+    'pin': 'ピン留め',
+    'unpin': 'ピン留めを解除',
+    'restore': '復元',
+    'deleteForever': '完全に削除',
+    'emptyTrash': 'ごみ箱を空にする',
+    'emptyTrashConfirm': 'ごみ箱のメモは復元できません。続行しますか？',
+    'trashEmpty': 'ごみ箱は空です',
+    'tabCloseOthers': '他のタブを閉じる',
+    'tabCloseAll': 'すべてのタブを閉じる',
+    'saved': '保存しました',
     'createTitle': '新規メモ',
     'editTitle': 'メモを編集',
     'titleHint': 'タイトル',
-    'contentHint': '何か書いてみましょう…（Markdown 対応）',
+    'contentHint': '何か書いてみましょう…（Markdown と [[Wリンク]] 対応）',
     'editTab': '編集',
     'previewTab': 'プレビュー',
+    'splitTab': '分割',
     'previewEmpty': 'プレビューする内容がありません',
     'linkCopiedHint': 'リンク：',
+    'wikiLinkNotFound': '同じタイトルのメモが見つかりません',
+    'copyMarkdown': 'Markdown としてコピー',
+    'copiedToClipboard': 'クリップボードにコピーしました',
+    'statsChars': '文字',
+    'statsWords': '語',
+    'statsLines': '行',
+    'tbBold': '太字',
+    'tbItalic': '斜体',
+    'tbHeading': '見出し',
+    'tbList': '列表',
+    'tbChecklist': 'タスクリスト',
+    'tbCode': 'コード',
+    'tbQuote': '引用',
+    'tbLink': 'リンク',
+    'tbTable': '表',
+    'tbDivider': '区切り線',
     'tagsLabel': 'タグ',
     'addTag': 'タグを追加',
     'tagNameHint': 'タグ名',
     'removeTag': 'タグを削除',
-    'folderLabel': 'フォルダ',
-    'newFolder': 'フォルダを作成',
-    'folderNameHint': 'フォルダ名',
-    'deleteFolderTitle': 'フォルダを削除',
-    'deleteFolderMessage': 'フォルダ内のメモは「未分類」になります。メモ自体は削除されません。',
-    'folderCreatedMessage': 'フォルダを作成しました',
+    'sectionOfNote': 'セクション',
     'settingsTitle': '設定',
     'languageSection': '表示言語',
     'languageSubtitle': 'すぐに反映され、選択は保存されます',
@@ -305,38 +488,83 @@ class AppStrings {
     'confirm': '確定',
     'undo': '復原',
     'settings': '設定',
+    'rename': '重新命名',
+    'close': '關閉',
+    'untitled': '無標題',
     'newNote': '新增筆記',
     'searchHint': '搜尋標題或內容',
     'emptyTitle': '還沒有筆記',
-    'emptySubtitle': '點右下角「新增筆記」開始第一則',
+    'emptySubtitle': '點上方「新增筆記」開始第一則',
     'noMatchTitle': '沒有符合的筆記',
     'noMatchSubtitle': '換個關鍵字試試',
     'deleteTitle': '刪除筆記',
     'deleteMessage': '確定刪除「{title}」嗎？',
     'deletedMessage': '已刪除「{title}」',
-    'filterAll': '全部',
-    'folderSection': '資料夾',
     'tagSection': '標籤',
-    'folderNone': '未分類',
     'tagNone': '無標籤',
+    'sortBy': '排序',
+    'sortUpdated': '最近編輯',
+    'sortCreated': '最近建立',
+    'sortTitle': '標題',
+    'allNotes': '所有筆記',
+    'pinnedScope': '置頂',
+    'trash': '資源回收筒',
+    'unfiled': '未分類',
+    'notebookLabel': '筆記本',
+    'sectionLabel': '區段',
+    'groupLabel': '區段群組',
+    'newNotebook': '新增筆記本',
+    'notebookNameHint': '筆記本名稱',
+    'newSection': '新增區段',
+    'sectionNameHint': '區段名稱',
+    'newSectionGroup': '新增區段群組',
+    'groupNameHint': '區段群組名稱',
+    'deleteNotebookTitle': '刪除筆記本',
+    'deleteNotebookMessage': '刪除後，其中的區段與區段群組一併刪除，筆記移入「未分類」。筆記本身不會遺失。',
+    'deleteSectionTitle': '刪除區段',
+    'deleteSectionMessage': '刪除後，區段內的筆記會變成「未分類」，筆記本身不會遺失。',
+    'deleteGroupTitle': '刪除區段群組',
+    'deleteGroupMessage': '群組內的區段會提升到筆記本下，不會被刪除。',
+    'pin': '置頂',
+    'unpin': '取消置頂',
+    'restore': '還原',
+    'deleteForever': '彻底刪除',
+    'emptyTrash': '清空資源回收筒',
+    'emptyTrashConfirm': '資源回收筒內的筆記將永久刪除且無法復原。確定繼續嗎？',
+    'trashEmpty': '資源回收筒是空的',
+    'tabCloseOthers': '關閉其他索引標籤',
+    'tabCloseAll': '關閉所有索引標籤',
+    'saved': '已儲存',
     'createTitle': '新增筆記',
     'editTitle': '編輯筆記',
     'titleHint': '標題',
-    'contentHint': '寫點什麼…（支援 Markdown）',
+    'contentHint': '寫點什麼…（支援 Markdown 與 [[雙鏈]]）',
     'editTab': '編輯',
     'previewTab': '預覽',
+    'splitTab': '分欄',
     'previewEmpty': '還沒有可預覽的內容',
     'linkCopiedHint': '連結：',
+    'wikiLinkNotFound': '找不到同標題的筆記',
+    'copyMarkdown': '複製為 Markdown',
+    'copiedToClipboard': '已複製到剪貼簿',
+    'statsChars': '字元',
+    'statsWords': '字數',
+    'statsLines': '行數',
+    'tbBold': '粗體',
+    'tbItalic': '斜體',
+    'tbHeading': '標題',
+    'tbList': '清單',
+    'tbChecklist': '待辦清單',
+    'tbCode': '程式碼',
+    'tbQuote': '引用',
+    'tbLink': '連結',
+    'tbTable': '表格',
+    'tbDivider': '分隔線',
     'tagsLabel': '標籤',
     'addTag': '新增標籤',
     'tagNameHint': '標籤名稱',
     'removeTag': '移除標籤',
-    'folderLabel': '資料夾',
-    'newFolder': '新增資料夾',
-    'folderNameHint': '資料夾名稱',
-    'deleteFolderTitle': '刪除資料夾',
-    'deleteFolderMessage': '刪除後，資料夾內的筆記會變成「未分類」，筆記本身不會遺失。',
-    'folderCreatedMessage': '已建立資料夾',
+    'sectionOfNote': '區段',
     'settingsTitle': '設定',
     'languageSection': '介面語言',
     'languageSubtitle': '立即生效，並記住你的選擇',

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
-import 'data/folder_repository.dart';
 import 'data/note_repository.dart';
+import 'data/notebook_repository.dart';
 import 'l10n/app_strings.dart';
 import 'models/app_settings.dart';
-import 'screens/note_list_screen.dart';
+import 'screens/home_shell.dart';
 import 'settings/settings_controller.dart';
 
 /// 应用根组件。
@@ -18,13 +18,13 @@ import 'settings/settings_controller.dart';
 class ArgonoteApp extends StatelessWidget {
   const ArgonoteApp({
     super.key,
-    required this.repository,
-    required this.folderRepository,
+    required this.noteRepository,
+    required this.notebookRepository,
     required this.settingsController,
   });
 
-  final NoteRepository repository;
-  final FolderRepository folderRepository;
+  final NoteRepository noteRepository;
+  final NotebookRepository notebookRepository;
   final SettingsController settingsController;
 
   @override
@@ -47,9 +47,9 @@ class ArgonoteApp extends StatelessWidget {
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
-          home: NoteListScreen(
-            repository: repository,
-            folderRepository: folderRepository,
+          home: HomeShell(
+            noteRepository: noteRepository,
+            notebookRepository: notebookRepository,
             settingsController: settingsController,
           ),
         );
